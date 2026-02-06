@@ -1,7 +1,59 @@
 # Steam Backlog Planner - Implementation Handover
 
 ## Session Summary
-Phase 3 (Calendar & Scheduling) is fully implemented. 258 tests passing across 32 files, all coverage thresholds met. Six code review findings from Phase 3: four fixed in-session (CR-014–016, CR-018), two deferred (CR-013 LOW, CR-017 MEDIUM).
+Integration testing infrastructure added. 258 unit tests + 42 integration tests all passing. Playwright E2E infrastructure set up with auth bypass and seed endpoint; 2 of 4 spec files written (settings, library). Paused mid-implementation due to usage limits.
+
+## Next Session TODO — Finish Integration Testing Plan
+
+### Remaining Playwright E2E Work
+1. **Write `tests/e2e/schedule.spec.ts`** (~7 tests): empty state, create session dialog, auto-generate, week/month navigation, iCal export download, edit/delete session
+2. **Write `tests/e2e/full-workflow.spec.ts`** (~1 test): settings → library → prioritize → auto-generate → view schedule
+3. **Run E2E tests** against live dev server: `npm run test:e2e` — requires `DATABASE_URL` and other env vars in `.env.local`
+4. **Debug any E2E failures** — the auth.setup.ts flow (CSRF → test-login → storage state) hasn't been verified against a live server yet; may need adjustments to the login flow or selectors in specs
+5. **Add unit tests for the test seed endpoint** (`src/app/api/test/seed/route.ts`) if coverage is affected
+
+### Key Context for Continuing
+- Playwright config is at `playwright.config.ts`, webServer starts `cross-env E2E_TESTING=true npm run dev`
+- Auth bypass: `test-login` Credentials provider in `src/lib/auth/index.ts` (line 62-75), only active when `E2E_TESTING=true`
+- Seed endpoint: `POST /api/test/seed` with scenarios `"default"`, `"with-library"`, `"full"` — test user ID is `"e2e-test-user"`
+- Existing specs reference UI elements by role/text — adjust selectors if they don't match actual rendered markup
+- The `tests/e2e/.auth/` directory is gitignored (stores Playwright auth state)
+
+## In Progress - Integration & E2E Testing
+
+### Layer 1: API Integration Tests (PGlite) ✅
+- **`vitest.integration.config.ts`**: Separate Vitest config — `environment: "node"`, `pool: "forks"`, `singleFork: true`
+- **`tests/integration/setup.ts`**: PGlite (in-process Postgres via WASM), raw DDL matching schema.ts, mocks for auth/cache, real DB for everything else
+- **`tests/integration/helpers.ts`**: `seedUser`, `seedGames`, `seedPreferences`, `seedSession`, `makeRequest`, `makeJsonRequest`, `authAs`, `authAsNone`
+- **6 test flow files, 42 tests total:**
+  - `error-boundaries.test.ts` (20): All 13 routes return 401 unauthed + 7 validation 400s
+  - `library-sync.test.ts` (5): Sync, re-sync onConflictDoUpdate, preserves status/priority, relational query
+  - `game-enrichment.test.ts` (4): Achievements persist to DB, HLTB fetch + DB cache early-return
+  - `prioritization-scheduling.test.ts` (5): Batch priority update, auto-generate priority order, clearExisting transaction
+  - `full-scheduling-workflow.test.ts` (3): Multi-step prefs→generate→CRUD→iCal, cross-user isolation, empty iCal
+  - `timezone-handling.test.ts` (5): Asia/Tokyo, America/Los_Angeles, UTC, manual session round-trip
+- **Key insight**: `vi.restoreAllMocks()` doesn't clear standalone `vi.fn()` call history — use `vi.hoisted()` for shared mock fns and track call count manually
+
+### Layer 2: Playwright E2E Tests (Partial) 🔨
+- **Installed**: `@playwright/test`, `cross-env`, Chromium browser
+- **`playwright.config.ts`**: Chromium-only, single worker, dev server with `E2E_TESTING=true`
+- **`src/lib/auth/index.ts`**: Added test-only `test-login` Credentials provider gated behind `E2E_TESTING=true`
+- **`src/app/api/test/seed/route.ts`**: Seed endpoint with 3 scenarios (default, with-library, full) — returns 403 when `E2E_TESTING !== "true"`
+- **`tests/e2e/auth.setup.ts`**: Seeds user, authenticates via test-login, saves storage state
+- **Completed specs**: `settings.spec.ts` (4 tests), `library.spec.ts` (5 tests)
+- **TODO specs**: `schedule.spec.ts`, `full-workflow.spec.ts`
+
+### npm Scripts Added
+- `npm run test:integration` — runs PGlite integration tests
+- `npm run test:e2e` — runs Playwright E2E tests
+- `npm run test:e2e:ui` — Playwright UI mode
+
+### Test Results
+| Suite | Files | Tests | Status |
+|-------|-------|-------|--------|
+| Unit tests | 32 | 258 | ✅ All pass |
+| Integration tests | 6 | 42 | ✅ All pass |
+| E2E tests | 2 | 9 | 🔨 Not run (needs dev server + DB) |
 
 ## Completed - Phase 3: Calendar & Scheduling
 
