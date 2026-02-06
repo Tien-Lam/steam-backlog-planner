@@ -1,181 +1,128 @@
 # Steam Backlog Planner - Implementation Handover
 
 ## Session Summary
-Phase 1 (Foundation) is fully implemented. All 7 tasks complete, project type-checks cleanly.
-Unit testing infrastructure added with 94 tests passing, all coverage thresholds met.
+Phase 2 (Hardening + Game Management) is fully implemented. All 3 Phase 1 code review issues + 5 Phase 2 review issues resolved, plus 5 feature stages complete. 144 tests passing across 20 files, all coverage thresholds met.
 
-## Completed Tasks - Testing Infrastructure ✅
+## Completed - Phase 2: Hardening + Game Management
 
-### Vitest Setup
+### Stage 1: Hardening Pass ✅
+- **CR-001**: Wrapped library sync DB writes in `db.transaction()` with error handling
+- **CR-002**: Added `res.ok` checks to `getPlayerSummary`, `getOwnedGames`, `getSteamProfile`
+- **CR-003**: Added runtime validation for `status` (enum check) and `priority` (non-negative integer) in PATCH /api/games
+- All 3 issues moved to Resolved in `CODE_REVIEW.md`
+
+### Stage 2: HLTB Integration ✅
+- **`src/lib/services/hltb.ts`**: `getHLTBData(gameName, steamAppId)` — searches HLTB, converts hours→minutes, persists to `game_cache`, 7-day cache via `cachedFetch`
+- **`src/app/api/hltb/[appId]/route.ts`**: Auth-gated GET endpoint, checks `game_cache` first, lazy-fetches HLTB on miss
+- 12 tests (6 service + 6 route)
+
+### Stage 3: Game Detail Pages ✅
+- **`src/lib/hooks/use-game-detail.ts`**: `useGameAchievements(appId)` + `useHLTBData(appId)` hooks
+- **`src/app/(dashboard)/library/[appId]/page.tsx`**: Full detail page with header image, HLTB progress bars (main/extra/completionist), achievements list with progress, status selector, Steam store link, sidebar with playtime
+- **`src/components/games/game-card.tsx`**: Added `next/link` wrapper — image/title link to `/library/{appId}`, status selector stays outside link
+- 7 new tests (6 hooks + 1 game-card link)
+
+### Stage 4: Settings Page ✅
+- **`src/app/api/preferences/route.ts`**: GET (returns defaults if none) + PATCH (validates weeklyHours 0-168, sessionLength 15-480, timezone non-empty; upserts)
+- **`src/lib/hooks/use-preferences.ts`**: `usePreferences()` + `useUpdatePreferences()` hooks
+- **`src/app/(dashboard)/settings/page.tsx`**: Form with number inputs, timezone select (15 common timezones), save button with success/error messages
+- 12 tests (8 API + 4 hooks)
+
+### Stage 5: Backlog Prioritization ✅
+- **Installed**: `@dnd-kit/core`, `@dnd-kit/sortable`, `@dnd-kit/utilities`
+- **`src/lib/hooks/use-priority.ts`**: `useBatchUpdatePriorities()` — batch PATCH /api/games for each reordered game
+- **`src/components/games/backlog-prioritizer.tsx`**: DnD sortable list of backlog games, drag handle, save button assigns `(length - index)` priority
+- **`src/app/(dashboard)/library/page.tsx`**: Converted to client component with Tabs — "All Games" (GameGrid) + "Prioritize Backlog" (BacklogPrioritizer)
+- 9 tests (4 hooks + 5 component)
+
+### Test Results
+| Metric | Phase 1 | Phase 2 | Threshold |
+|--------|---------|---------|-----------|
+| Test files | 13 | 20 | — |
+| Tests | 94 | 144 | — |
+| Statements | 97.43% | 94.01% | 80% |
+| Branches | 89.31% | 85.24% | 80% |
+| Functions | 93.87% | 89.15% | 80% |
+| Lines | 98.86% | 95.98% | 80% |
+
+### New Files (Phase 2)
+| File | Type |
+|------|------|
+| `src/lib/services/hltb.ts` | HLTB service |
+| `src/app/api/hltb/[appId]/route.ts` | HLTB API route |
+| `src/lib/hooks/use-game-detail.ts` | Achievement + HLTB hooks |
+| `src/lib/hooks/use-preferences.ts` | Preferences hooks |
+| `src/lib/hooks/use-priority.ts` | Batch priority hook |
+| `src/app/(dashboard)/library/[appId]/page.tsx` | Game detail page |
+| `src/app/(dashboard)/settings/page.tsx` | Settings page |
+| `src/app/api/preferences/route.ts` | Preferences API |
+| `src/components/games/backlog-prioritizer.tsx` | DnD priority component |
+
+### Modified Files (Phase 2)
+| File | Change |
+|------|--------|
+| `src/app/api/steam/library/route.ts` | Transaction wrapper + error handling |
+| `src/lib/services/steam.ts` | `res.ok` checks on getPlayerSummary, getOwnedGames |
+| `src/app/api/auth/steam/callback/route.ts` | `res.ok` check on getSteamProfile |
+| `src/app/api/games/route.ts` | Status enum + priority validation |
+| `src/components/games/game-card.tsx` | Link wrapper to detail page |
+| `src/app/(dashboard)/library/page.tsx` | Client component with tabs |
+
+## Completed - Phase 1: Foundation ✅
+
+### Testing Infrastructure
 - **Config**: `vitest.config.ts` — jsdom environment, v8 coverage, 80% thresholds
 - **Setup**: `vitest.setup.ts` — jest-dom matchers, dummy env vars, afterEach cleanup
-- **Scripts**: `npm test`, `npm run test:watch`, `npm run test:coverage`
 - **Helpers**: `src/lib/__tests__/helpers.ts` — `makeLibraryGame()` factory, `mockFetchResponse()`
 
-### Test Files (13 files, 94 tests)
-
-| File | Tests | Coverage |
-|------|-------|----------|
-| `src/lib/services/__tests__/steam.test.ts` | 15 | All fetch functions + URL helpers |
-| `src/lib/services/__tests__/cache.test.ts` | 11 | getCached, setCache, invalidateCache, cachedFetch, TTLs |
-| `src/lib/auth/__tests__/steam-provider.test.ts` | 9 | getSteamLoginUrl (params, realm), verifySteamLogin (valid/invalid/missing) |
-| `src/lib/db/__tests__/schema.test.ts` | 7 | Enum values, table exports |
-| `src/lib/hooks/__tests__/use-library.test.tsx` | 5 | useLibrary (loading/success/error), useUpdateGameStatus |
-| `src/app/api/steam/library/__tests__/route.test.ts` | 4 | 401, 404, cache+upsert, returns list |
-| `src/app/api/steam/achievements/[appId]/__tests__/route.test.ts` | 8 | 401, 400, 404, enriched data, fetcher callback, DB updates |
-| `src/app/api/games/__tests__/route.test.ts` | 5 | 401, 400, update status/priority |
-| `src/app/api/auth/steam/__tests__/route.test.ts` | 2 | Redirect to Steam |
-| `src/app/api/auth/steam/callback/__tests__/route.test.ts` | 5 | Failed verify, profile fetch, signIn, missing profile |
-| `src/components/games/__tests__/game-card.test.tsx` | 7 | Name, fallback, badge, playtime, HLTB progress, image |
-| `src/components/games/__tests__/game-grid.test.tsx` | 12 | Loading, error, cards, search, filter, sort (name/lastPlayed), status change, empty states |
-| `src/components/__tests__/nav.test.tsx` | 4 | Nav items, brand, authenticated user, unauthenticated |
-
-### Coverage Results
-| Metric | Result | Threshold |
-|--------|--------|-----------|
-| Statements | 97.43% | 80% |
-| Branches | 89.31% | 80% |
-| Functions | 93.87% | 80% |
-| Lines | 98.86% | 80% |
-
-### Coverage Exclusions (in vitest.config.ts)
-- `src/components/ui/**` — shadcn primitives
-- `src/lib/db/index.ts` — DB client init
-- `src/lib/db/schema.ts` — Drizzle relation declarations
-- `src/lib/auth/index.ts` — NextAuth config with DB calls
-- `src/lib/auth/types.ts` — type declarations only
-- `src/lib/providers.tsx` — thin wrapper
-- `src/lib/utils.ts` — tiny utility
-- `src/lib/__tests__/**` — test helpers
-- `src/app/api/auth/[...nextauth]/**` — re-export
-
-### Remaining
-- [ ] Run `npx tsc --noEmit` to verify no type errors
-- [ ] Consider E2E tests as a future phase
-
-## Completed Tasks - Phase 1: Foundation
-
-### 1. Next.js 15 Project Setup ✅
-- Created project at `V:\Projects\steam-backlog-planner`
-- Next.js 16.1.6 with App Router, TypeScript, Tailwind CSS v4
-- ESLint configured
-- Image remotePatterns configured for Steam CDN domains
-
-### 2. shadcn/ui Installation ✅
-- Initialized with dark theme
-- Installed components: button, card, input, label, badge, avatar, dropdown-menu, dialog, scroll-area, separator, tabs, skeleton, progress, select
-- Updated `globals.css` with dark gaming theme (deep blue/cyan colors using oklch)
-- Set `<html className="dark">` in layout
-
-### 3. Drizzle ORM Setup ✅
-- Schema defined at `src/lib/db/schema.ts`
-- Tables: users, user_preferences, user_games, game_cache, user_achievements, scheduled_sessions
-- Enums: game_status (backlog, playing, completed, abandoned)
-- Relations configured between all tables
-- Types exported
-- Drizzle config at `drizzle.config.ts`
-- DB scripts: db:generate, db:migrate, db:push, db:studio
-
-### 4. Steam OpenID Authentication ✅
-- Custom Steam OpenID 2.0 provider at `src/lib/auth/steam-provider.ts`
-- Auth.js v5 configured with Credentials provider at `src/lib/auth/index.ts`
-- Type augmentation for steamId on session at `src/lib/auth/types.ts`
-- API routes:
-  - `src/app/api/auth/[...nextauth]/route.ts` - NextAuth handler
-  - `src/app/api/auth/steam/route.ts` - Redirects to Steam OpenID
-  - `src/app/api/auth/steam/callback/route.ts` - Validates OpenID response, fetches profile, creates/updates user
-- Login page at `src/app/(auth)/login/page.tsx` with Steam branding
-
-### 5. Steam API Service Layer ✅
-- `src/lib/services/steam.ts` with functions:
-  - `getPlayerSummary(steamId)` - Player profile
-  - `getOwnedGames(steamId)` - Full game library with playtime
-  - `getPlayerAchievements(steamId, appId)` - Per-game achievements
-  - `getSchemaForGame(appId)` - Achievement metadata
-  - Helper URLs: `getGameHeaderUrl`, `getGameCapsuleUrl`, `getStorePage`
-
-### 6. Redis Caching (Upstash) ✅
-- `src/lib/services/cache.ts` with:
-  - TTL constants: STEAM_LIBRARY (1hr), STEAM_ACHIEVEMENTS (30min), HLTB_DATA (7d), GAME_METADATA (24hr), PLAYER_PROFILE (6hr)
-  - `getCached<T>()` / `setCache<T>()` - Direct cache read/write
-  - `cachedFetch<T>()` - Fetch-through cache (check cache, fallback to fetcher, store result)
-  - `invalidateCache()` - Cache busting
-  - Namespaced keys: `sbp:{category}:{parts}`
-
-### 7. Game Library UI ✅
-- **Dashboard layout**: `src/app/(dashboard)/layout.tsx` - Auth-gated with nav
-- **Nav component**: `src/components/nav.tsx` - Links to Dashboard, Library, Settings; user avatar dropdown with sign out
-- **Dashboard page**: `src/app/(dashboard)/page.tsx` - Stats cards (total, backlog, playing, completed), total playtime
-- **Library page**: `src/app/(dashboard)/library/page.tsx`
-- **Game card**: `src/components/games/game-card.tsx` - Header image, status badge, playtime, HLTB progress bar, status selector
-- **Game grid**: `src/components/games/game-grid.tsx` - Search, status filter, sort (playtime/name/lastPlayed), loading skeletons
-- **API routes**:
-  - `GET /api/steam/library` - Syncs Steam library to DB, returns enriched game list
-  - `GET /api/steam/achievements/[appId]` - Fetches and caches achievements with schema
-  - `PATCH /api/games` - Update game status/priority
-- **Hooks**: `src/lib/hooks/use-library.ts` - TanStack Query hooks for library data and status mutations
-- **Providers**: `src/lib/providers.tsx` - SessionProvider + QueryClientProvider
+### Foundation Features
+1. Next.js 16 project with App Router, TypeScript, Tailwind CSS v4
+2. shadcn/ui with dark gaming theme (14 components)
+3. Drizzle ORM schema (users, preferences, games, cache, achievements, sessions)
+4. Steam OpenID authentication via Auth.js v5
+5. Steam API service layer (player summary, owned games, achievements, schema)
+6. Upstash Redis caching with TTL constants
+7. Game library UI (dashboard, grid, cards, search/filter/sort)
 
 ## File Structure
 
 ```
 steam-backlog-planner/
-├── drizzle.config.ts
-├── vitest.config.ts               (test config, coverage thresholds)
-├── vitest.setup.ts                (jest-dom, env vars, cleanup)
-├── CLAUDE.md                      (Claude Code project instructions)
-├── HANDOVER.md                    (this file)
-├── next.config.ts                 (image domains for Steam CDN)
-├── .env.example
-├── .gitignore                     (excludes .env*, keeps .env.example)
-├── .claude/rules/testing.md       (mocking recipes for tests)
+├── CLAUDE.md
+├── HANDOVER.md
+├── CODE_REVIEW.md
+├── vitest.config.ts
+├── vitest.setup.ts
 ├── src/
 │   ├── app/
-│   │   ├── globals.css            (dark gaming theme)
-│   │   ├── layout.tsx             (root layout with Providers)
-│   │   ├── (auth)/
-│   │   │   └── login/page.tsx     (Steam login page)
+│   │   ├── (auth)/login/page.tsx
 │   │   ├── (dashboard)/
-│   │   │   ├── layout.tsx         (auth-gated, nav)
-│   │   │   ├── page.tsx           (dashboard overview)
-│   │   │   └── library/page.tsx   (game library grid)
+│   │   │   ├── layout.tsx
+│   │   │   ├── page.tsx                    (dashboard)
+│   │   │   ├── library/
+│   │   │   │   ├── page.tsx                (tabbed: grid + prioritizer)
+│   │   │   │   └── [appId]/page.tsx        (game detail)
+│   │   │   └── settings/page.tsx
 │   │   └── api/
-│   │       ├── auth/
-│   │       │   ├── [...nextauth]/route.ts
-│   │       │   └── steam/
-│   │       │       ├── route.ts          (redirect to Steam)
-│   │       │       └── callback/route.ts (OpenID callback)
-│   │       ├── steam/
-│   │       │   ├── library/route.ts
-│   │       │   └── achievements/[appId]/route.ts
-│   │       └── games/route.ts
+│   │       ├── auth/steam/{route,callback/route}.ts
+│   │       ├── steam/library/route.ts
+│   │       ├── steam/achievements/[appId]/route.ts
+│   │       ├── games/route.ts
+│   │       ├── hltb/[appId]/route.ts
+│   │       └── preferences/route.ts
 │   ├── components/
 │   │   ├── nav.tsx
-│   │   ├── ui/                    (14 shadcn components)
+│   │   ├── ui/                              (14 shadcn components)
 │   │   └── games/
 │   │       ├── game-card.tsx
-│   │       └── game-grid.tsx
+│   │       ├── game-grid.tsx
+│   │       └── backlog-prioritizer.tsx
 │   └── lib/
-│       ├── providers.tsx
-│       ├── utils.ts
-│       ├── __tests__/helpers.ts   (test factories)
-│       ├── auth/
-│       │   ├── index.ts           (Auth.js config)
-│       │   ├── steam-provider.ts  (OpenID 2.0 helpers)
-│       │   ├── types.ts           (session type augmentation)
-│       │   └── __tests__/steam-provider.test.ts
-│       ├── db/
-│       │   ├── index.ts           (Neon + Drizzle client)
-│       │   ├── schema.ts          (all tables, relations, types)
-│       │   └── __tests__/schema.test.ts
-│       ├── services/
-│       │   ├── steam.ts           (Steam Web API wrapper)
-│       │   ├── cache.ts           (Upstash Redis caching)
-│       │   └── __tests__/{steam,cache}.test.ts
-│       ├── hooks/
-│       │   ├── use-library.ts     (TanStack Query hooks)
-│       │   └── __tests__/use-library.test.tsx
-│       └── stores/                (empty, for Zustand later)
+│       ├── auth/{index,steam-provider,types}.ts
+│       ├── db/{index,schema}.ts
+│       ├── services/{steam,cache,hltb}.ts
+│       ├── hooks/{use-library,use-game-detail,use-preferences,use-priority}.ts
+│       └── providers.tsx
 ```
 
 ## Environment Variables Needed
@@ -193,20 +140,6 @@ Copy `.env.example` to `.env.local` and fill in:
 1. Copy `.env.example` to `.env.local` and fill in values
 2. `npm run db:push` - Push schema to Neon
 3. `npm run dev` - Start dev server
-
-## Next Steps - Phase 2: Game Management
-
-### Hardening (do first — before new features)
-- [ ] **CR-001**: Wrap library sync DB writes in a transaction (`src/app/api/steam/library/route.ts`)
-- [ ] **CR-002**: Add `res.ok` checks to all Steam API fetch calls (`src/lib/services/steam.ts`, `src/app/api/auth/steam/callback/route.ts`)
-- [ ] **CR-003**: Validate `status` enum and `priority` type in PATCH /api/games (`src/app/api/games/route.ts`)
-- [ ] Update tests for all three fixes, move entries to "Resolved" in `CODE_REVIEW.md`
-
-### Features
-- [ ] HowLongToBeat integration (`src/lib/services/hltb.ts`) using `howlongtobeat` package
-- [ ] Game detail pages with HLTB/achievement data (`src/app/(dashboard)/library/[appId]/page.tsx`)
-- [ ] Backlog prioritization with drag & drop
-- [ ] Settings page for user preferences
 
 ## Next Steps - Phase 3: Calendar & Scheduling
 
@@ -227,102 +160,7 @@ Copy `.env.example` to `.env.local` and fill in:
 - [ ] Discord webhook notifications
 - [ ] IGDB integration for additional metadata
 
----
+## Known Issues
 
-# Full Implementation Plan
-
-## Overview
-A modern web app to manage Steam game backlog, track completion progress via achievements and HowLongToBeat data, and schedule gaming sessions with calendar integration.
-
-## Project Details
-- **Location**: `V:\Projects\steam-backlog-planner`
-- **Database**: Neon (serverless PostgreSQL)
-- **Deployment**: Vercel
-- **Theme**: Dark gaming aesthetic
-
-## Tech Stack
-
-| Component | Choice | Rationale |
-|-----------|--------|-----------|
-| **Framework** | Next.js 15 (App Router) | API routes, RSC, SSR, excellent Auth.js integration |
-| **UI** | shadcn/ui + Tailwind CSS | Modern design, full customization, Radix accessibility |
-| **Database** | PostgreSQL + Drizzle ORM | Type-safe, serverless-ready, lightweight |
-| **Caching** | Upstash Redis + TanStack Query | Multi-tier caching, respects API rate limits |
-| **State** | Zustand (UI) + TanStack Query (server) | Clean separation, minimal boilerplate |
-| **Auth** | Auth.js v5 + custom Steam provider | Steam OpenID 2.0 support |
-
-## Core Features
-
-### Phase 1: Foundation ✅ COMPLETE
-- [x] Next.js 15 project setup with TypeScript
-- [x] shadcn/ui installation and theme configuration
-- [x] PostgreSQL + Drizzle schema and migrations
-- [x] Steam OpenID authentication via Auth.js
-- [x] Steam API integration (GetOwnedGames, GetPlayerSummaries)
-- [x] Redis caching layer setup
-- [x] Game library display (grid view)
-
-### Phase 2: Game Management
-- [ ] Game status system (backlog, playing, completed, abandoned)
-- [ ] HowLongToBeat integration for completion estimates
-- [ ] Steam achievement fetching and progress calculation
-- [ ] Game detail pages with HLTB/achievement data
-- [ ] Search, filter, and sort functionality
-- [ ] Backlog prioritization (drag & drop)
-
-### Phase 3: Calendar & Scheduling
-- [ ] Calendar component (weekly/monthly views)
-- [ ] Manual gaming session scheduling
-- [ ] Auto-schedule generator based on:
-  - Remaining playtime (HLTB - current playtime)
-  - Achievement completion percentage
-  - User preferences (weekly hours, session length)
-- [ ] iCal export functionality
-
-### Phase 4: Statistics & Polish
-- [ ] Statistics dashboard with charts
-- [ ] Playtime analytics and completion predictions
-- [ ] Mobile responsive design
-- [ ] Loading states and error handling
-
-### Phase 5: External Integrations
-- [ ] Google Calendar OAuth and two-way sync
-- [ ] Discord webhook notifications
-- [ ] IGDB integration for additional metadata
-
-## Database Schema (Key Tables)
-
-```sql
-users (id, steam_id, steam_username, avatar_url, created_at)
-user_preferences (user_id, weekly_hours, session_length, timezone)
-user_games (user_id, steam_app_id, status, priority, playtime_minutes)
-game_cache (steam_app_id, name, hltb_main, hltb_extra, total_achievements)
-user_achievements (user_id, steam_app_id, achieved_count, total_count)
-scheduled_sessions (user_id, steam_app_id, start_time, end_time, completed)
-```
-
-## Caching Strategy
-
-| Data Type | TTL | Layer |
-|-----------|-----|-------|
-| Steam Library | 1 hour | Redis |
-| Steam Achievements | 30 min | Redis |
-| HLTB Data | 7 days | Redis + PostgreSQL |
-| Game Metadata | 24 hours | Redis + PostgreSQL |
-| Player Profile | 6 hours | Redis |
-
-## API Rate Limits
-
-- **Steam Web API**: ~100k calls/day, batch up to 100 IDs per request
-- **HowLongToBeat**: Unofficial scraping, cache aggressively (7+ days)
-- Use server-side rate limiting with token bucket algorithm
-
-## Verification Plan
-
-1. **Auth**: Sign in with Steam, verify session persists
-2. **Library**: Confirm games load with correct playtime data
-3. **HLTB**: Verify completion estimates match HowLongToBeat website
-4. **Achievements**: Check achievement progress syncs correctly
-5. **Calendar**: Create session, verify it appears on calendar
-6. **Export**: Download iCal, import to calendar app
-7. **Caching**: Check Redis keys populate, verify TTL behavior
+- **Build requires env vars**: `npm run build` fails without `DATABASE_URL` set (Neon client initializes at module load). This is expected — deploy with env vars configured.
+- **Pre-existing lint warning**: `login/page.tsx` uses `<a>` for Steam auth redirect — intentional since it's an API route that redirects externally.
