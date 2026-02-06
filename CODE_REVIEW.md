@@ -4,27 +4,6 @@ Tracked issues from end-of-session code reviews. Fix before building on top of a
 
 ## Open
 
-### CR-006: Timezone validation accepts arbitrary strings [MEDIUM]
-- **File**: `src/app/api/preferences/route.ts` (lines 60-63)
-- **Found**: Phase 2 review
-- **Fix by**: Phase 3 start (scheduler will use timezone for session scheduling)
-- **Issue**: Server-side validation only checks non-empty string. Any arbitrary value is accepted and persisted. The Settings UI has a hardcoded allowlist of 15 timezones, but the API does not enforce it.
-- **Fix**: Validate against `Intl.supportedValuesOf('timeZone')` or the same allowlist used in the UI.
-
-### CR-007: HLTB `cachedFetch` caches `null` results ineffectively [MEDIUM]
-- **Files**: `src/lib/services/hltb.ts`, `src/lib/services/cache.ts`
-- **Found**: Phase 2 review
-- **Fix by**: Phase 3 (when scheduler needs reliable HLTB data)
-- **Issue**: When HLTB search returns no results, `null` is stored in Redis. But `getCached` treats `null` as cache miss, so every request for games without HLTB data re-hits the HLTB API.
-- **Fix**: Use a sentinel value (e.g., `{ notFound: true }`) instead of `null`, or special-case null handling in `cachedFetch`.
-
-### CR-009: Batch priority update fires N parallel requests [MEDIUM]
-- **File**: `src/lib/hooks/use-priority.ts`
-- **Found**: Phase 2 review
-- **Fix by**: Phase 3 (before users accumulate large backlogs)
-- **Issue**: `useBatchUpdatePriorities` sends one `PATCH /api/games` per game via `Promise.all`. For 100+ game backlogs, this overwhelms browser connections and may cause DB contention.
-- **Fix**: Create a dedicated `PATCH /api/games/batch` endpoint that accepts an array of updates in a single request with one DB transaction.
-
 ### CR-013: DB-cached HLTB data never expires [LOW]
 - **File**: `src/app/api/hltb/[appId]/route.ts` (line 34)
 - **Found**: Phase 2 review
@@ -32,7 +11,56 @@ Tracked issues from end-of-session code reviews. Fix before building on top of a
 - **Issue**: The HLTB route checks `game.hltbMainMinutes !== null` to return cached data, but never checks `cachedAt` freshness. Redis cache has 7-day TTL, but the DB-level cache is permanent.
 - **Fix**: Add a staleness check (e.g., re-fetch if `cachedAt` older than 30 days).
 
+### CR-017: Auto-generate endpoint lacks rate limiting [MEDIUM]
+- **File**: `src/app/api/sessions/auto-generate/route.ts`
+- **Found**: Phase 3 review
+- **Fix by**: Phase 4 (before production deployment)
+- **Issue**: The auto-generate endpoint can create 100+ sessions per request. No rate limiting exists to prevent abuse.
+- **Fix**: Add rate limiting middleware or per-user throttling (e.g., max 1 auto-generate request per 10 seconds).
+
 ## Resolved
+
+### CR-014: Timezone bug in session form dialog [HIGH]
+- **File**: `src/components/schedule/session-form-dialog.tsx`
+- **Found**: Phase 3 review
+- **Resolved**: Phase 3 hardening
+- **Fix**: Added `timezone` prop, use `fromZonedTime`/`toZonedTime` from date-fns-tz for correct local-to-UTC conversion
+
+### CR-015: Incomplete cross-field validation in PATCH sessions [MEDIUM-HIGH]
+- **File**: `src/app/api/sessions/[sessionId]/route.ts`
+- **Found**: Phase 3 review
+- **Resolved**: Phase 3 hardening
+- **Fix**: Fetch existing session and validate merged start/end times when only one field is updated
+
+### CR-016: Missing notes length validation [MEDIUM]
+- **Files**: `src/app/api/sessions/route.ts`, `src/app/api/sessions/[sessionId]/route.ts`
+- **Found**: Phase 3 review
+- **Resolved**: Phase 3 hardening
+- **Fix**: Added 2000 character limit on notes field in both POST and PATCH endpoints
+
+### CR-018: Race condition in auto-generate clearExisting [MEDIUM]
+- **File**: `src/app/api/sessions/auto-generate/route.ts`
+- **Found**: Phase 3 review
+- **Resolved**: Phase 3 hardening
+- **Fix**: Wrapped delete + insert in `db.transaction()` so both succeed or fail together
+
+### CR-006: Timezone validation accepts arbitrary strings [MEDIUM]
+- **File**: `src/app/api/preferences/route.ts`
+- **Found**: Phase 2 review
+- **Resolved**: Pre-Phase 3 hardening
+- **Fix**: Validated against `Intl.supportedValuesOf('timeZone')`
+
+### CR-007: HLTB `cachedFetch` caches `null` results ineffectively [MEDIUM]
+- **Files**: `src/lib/services/hltb.ts`, `src/lib/services/cache.ts`
+- **Found**: Phase 2 review
+- **Resolved**: Pre-Phase 3 hardening
+- **Fix**: Added null sentinel pattern in `cachedFetch` — stores `{ __cacheNull: true }` for null values
+
+### CR-009: Batch priority update fires N parallel requests [MEDIUM]
+- **File**: `src/lib/hooks/use-priority.ts`
+- **Found**: Phase 2 review
+- **Resolved**: Pre-Phase 3 hardening
+- **Fix**: Created `PATCH /api/games/batch` endpoint with single transaction, updated hook to use it
 
 ### CR-001: Library sync lacks transaction boundary [HIGH]
 - **File**: `src/app/api/steam/library/route.ts`
