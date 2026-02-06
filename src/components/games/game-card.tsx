@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -13,6 +14,7 @@ import {
 } from "@/components/ui/select";
 import type { LibraryGame } from "@/lib/hooks/use-library";
 import type { GameStatus } from "@/lib/db/schema";
+import { formatPlaytime } from "@/lib/utils";
 
 const STATUS_COLORS: Record<GameStatus, string> = {
   backlog: "bg-muted text-muted-foreground",
@@ -20,13 +22,6 @@ const STATUS_COLORS: Record<GameStatus, string> = {
   completed: "bg-green-500/20 text-green-400",
   abandoned: "bg-destructive/20 text-destructive",
 };
-
-function formatPlaytime(minutes: number): string {
-  if (minutes < 60) return `${minutes}m`;
-  const hours = Math.floor(minutes / 60);
-  const mins = minutes % 60;
-  return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
-}
 
 interface GameCardProps {
   game: LibraryGame;
@@ -47,27 +42,31 @@ export function GameCard({ game, onStatusChange }: GameCardProps) {
 
   return (
     <Card className="overflow-hidden group hover:border-primary/50 transition-colors">
-      <div className="relative aspect-[460/215]">
-        <Image
-          src={headerUrl}
-          alt={gameName}
-          fill
-          className="object-cover"
-          sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
-          unoptimized
-        />
-        <div className="absolute top-2 right-2">
-          <Badge className={STATUS_COLORS[game.status]} variant="secondary">
-            {game.status}
-          </Badge>
+      <Link href={`/library/${game.steamAppId}`}>
+        <div className="relative aspect-[460/215]">
+          <Image
+            src={headerUrl}
+            alt={gameName}
+            fill
+            className="object-cover"
+            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+            unoptimized
+          />
+          <div className="absolute top-2 right-2">
+            <Badge className={STATUS_COLORS[game.status]} variant="secondary">
+              {game.status}
+            </Badge>
+          </div>
         </div>
-      </div>
 
-      <div className="p-3 space-y-2">
-        <h3 className="font-semibold text-sm truncate" title={gameName}>
-          {gameName}
-        </h3>
+        <div className="p-3 space-y-2">
+          <h3 className="font-semibold text-sm truncate" title={gameName}>
+            {gameName}
+          </h3>
+        </div>
+      </Link>
 
+      <div className="px-3 pb-3 space-y-2">
         <div className="flex items-center justify-between text-xs text-muted-foreground">
           <span>{formatPlaytime(game.playtimeMinutes)}</span>
           {hltbMain && (

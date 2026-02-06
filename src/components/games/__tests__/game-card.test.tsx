@@ -3,6 +3,12 @@ import { render, screen } from "@testing-library/react";
 import { GameCard } from "../game-card";
 import { makeLibraryGame } from "@/lib/__tests__/helpers";
 
+vi.mock("next/link", () => ({
+  default: ({ children, href, ...props }: { children: React.ReactNode; href: string }) => (
+    <a href={href} {...props}>{children}</a>
+  ),
+}));
+
 vi.mock("next/image", () => ({
   default: (props: Record<string, unknown>) => {
     // eslint-disable-next-line @next/next/no-img-element, jsx-a11y/alt-text
@@ -94,6 +100,13 @@ describe("GameCard", () => {
     });
     render(<GameCard game={game} onStatusChange={onStatusChange} />);
     expect(screen.queryByTestId("progress")).not.toBeInTheDocument();
+  });
+
+  it("links to game detail page", () => {
+    const game = makeLibraryGame();
+    render(<GameCard game={game} onStatusChange={onStatusChange} />);
+    const link = screen.getByRole("link");
+    expect(link).toHaveAttribute("href", "/library/440");
   });
 
   it("renders game image with correct src", () => {
