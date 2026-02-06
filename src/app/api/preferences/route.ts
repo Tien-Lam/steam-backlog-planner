@@ -1,0 +1,88 @@
+import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@/lib/auth";
+import { db, userPreferences } from "@/lib/db";
+import { eq } from "drizzle-orm";
+
+const DEFAULTS = {
+  weeklyHours: 10,
+  sessionLengthMinutes: 60,
+  timezone: "UTC",
+};
+
+export async function GET() {
+  const session = await auth();
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const rows = await db
+    .select()
+    .from(userPreferences)
+    .where(eq(userPreferences.userId, session.user.id))
+    .limit(1);
+
+  if (!rows.length) {
+    return NextResponse.json(DEFAULTS);
+  }
+
+  return NextResponse.json({
+    weeklyHours: rows[0].weeklyHours ?? DEFAULTS.weeklyHours,
+    sessionLengthMinutes: rows[0].sessionLengthMinutes ?? DEFAULTS.sessionLengthMinutes,
+    timezone: rows[0].timezone ?? DEFAULTS.timezone,
+  });
+}
+
+export async function PATCH(req: NextRequest) {
+  const session = await auth();
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  let body;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+  }
+  const { weeklyHours, sessionLengthMinutes, timezone } = body as {
+    weeklyHours?: number;
+    sessionLengthMinutes?: number;
+    timezone?: string;
+  };
+
+  if (weeklyHours !== undefined) {
+    if (typeof weeklyHours !== "number" || weeklyHours < 0 || weeklyHours > 168) {
+      return NextResponse.json({ error: "weeklyHours must be 0-168" }, { status: 400 });
+    }
+  }
+
+  if (sessionLengthMinutes !== undefined) {
+    if (typeof sessionLengthMinutes !== "number" || sessionLengthMinutes < 15 || sessionLengthMinutes > 480) {
+      return NextResponse.json({ error: "sessionLengthMinutes must be 15-480" }, { status: 400 });
+    }
+  }
+
+  if (timezone !== undefined) {
+    if (typeof timezone !== "string" || timezone.trim() === "") {
+      return NextResponse.json({ error: "timezone must be a non-empty string" }, { status: 400 });
+    }
+  }
+
+  const updates: Record<string, unknown> = { updatedAt: new Date() };
+  if (weeklyHours !== undefined) updates.weeklyHours = weeklyHours;
+  if (sessionLengthMinutes !== undefined) updates.sessionLengthMinutes = sessionLengthMinutes;
+  if (timezone !== undefined) updates.timezone = timezone;
+
+  await db
+    .insert(userPreferences)
+    .values({
+      userId: session.user.id,
+      ...updates,
+    })
+    .onConflictDoUpdate({
+      target: userPreferences.userId,
+      set: updates,
+    });
+
+  return NextResponse.json({ success: true });
+}
