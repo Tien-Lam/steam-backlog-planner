@@ -47,6 +47,7 @@ export async function getPlayerSummary(
   const res = await fetch(
     `${STEAM_API_BASE}/ISteamUser/GetPlayerSummaries/v0002/?key=${apiKey()}&steamids=${steamId}`
   );
+  if (!res.ok) return null;
   const data = await res.json();
   return data.response?.players?.[0] ?? null;
 }
@@ -65,6 +66,7 @@ export async function getOwnedGames(
   const res = await fetch(
     `${STEAM_API_BASE}/IPlayerService/GetOwnedGames/v0001/?${params}`
   );
+  if (!res.ok) return [];
   const data = await res.json();
   return data.response?.games ?? [];
 }

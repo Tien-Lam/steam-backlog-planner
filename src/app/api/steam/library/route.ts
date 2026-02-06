@@ -27,43 +27,52 @@ export async function GET() {
     getOwnedGames(steamId)
   );
 
-  for (const game of games) {
-    await db
-      .insert(gameCache)
-      .values({
-        steamAppId: game.appid,
-        name: game.name,
-        headerImageUrl: getGameHeaderUrl(game.appid),
-      })
-      .onConflictDoUpdate({
-        target: gameCache.steamAppId,
-        set: {
-          name: game.name,
-          headerImageUrl: getGameHeaderUrl(game.appid),
-          cachedAt: new Date(),
-        },
-      });
+  try {
+    await db.transaction(async (tx) => {
+      for (const game of games) {
+        await tx
+          .insert(gameCache)
+          .values({
+            steamAppId: game.appid,
+            name: game.name,
+            headerImageUrl: getGameHeaderUrl(game.appid),
+          })
+          .onConflictDoUpdate({
+            target: gameCache.steamAppId,
+            set: {
+              name: game.name,
+              headerImageUrl: getGameHeaderUrl(game.appid),
+              cachedAt: new Date(),
+            },
+          });
 
-    await db
-      .insert(userGames)
-      .values({
-        userId: session.user.id,
-        steamAppId: game.appid,
-        playtimeMinutes: game.playtime_forever,
-        lastPlayed: game.rtime_last_played
-          ? new Date(game.rtime_last_played * 1000)
-          : null,
-      })
-      .onConflictDoUpdate({
-        target: [userGames.userId, userGames.steamAppId],
-        set: {
-          playtimeMinutes: game.playtime_forever,
-          lastPlayed: game.rtime_last_played
-            ? new Date(game.rtime_last_played * 1000)
-            : null,
-          updatedAt: new Date(),
-        },
-      });
+        await tx
+          .insert(userGames)
+          .values({
+            userId: session.user.id,
+            steamAppId: game.appid,
+            playtimeMinutes: game.playtime_forever,
+            lastPlayed: game.rtime_last_played
+              ? new Date(game.rtime_last_played * 1000)
+              : null,
+          })
+          .onConflictDoUpdate({
+            target: [userGames.userId, userGames.steamAppId],
+            set: {
+              playtimeMinutes: game.playtime_forever,
+              lastPlayed: game.rtime_last_played
+                ? new Date(game.rtime_last_played * 1000)
+                : null,
+              updatedAt: new Date(),
+            },
+          });
+      }
+    });
+  } catch {
+    return NextResponse.json(
+      { error: "Failed to sync library" },
+      { status: 500 }
+    );
   }
 
   const userGamesList = await db.query.userGames.findMany({

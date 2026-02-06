@@ -4,6 +4,7 @@ const mockAuth = vi.fn();
 const mockDbSelectLimit = vi.fn();
 const mockFindMany = vi.fn();
 const mockCachedFetch = vi.fn();
+const mockTransaction = vi.fn();
 
 vi.mock("@/lib/auth", () => ({
   auth: () => mockAuth(),
@@ -23,6 +24,7 @@ vi.mock("@/lib/db", () => {
     db: {
       select: () => selectChain,
       insert: () => insertChain,
+      transaction: (...args: unknown[]) => mockTransaction(...args),
       query: {
         userGames: {
           findMany: (...args: unknown[]) => mockFindMany(...args),
@@ -56,6 +58,17 @@ beforeEach(() => {
   mockDbSelectLimit.mockReset();
   mockFindMany.mockReset();
   mockCachedFetch.mockReset();
+  mockTransaction.mockReset();
+  mockTransaction.mockImplementation(async (cb: (tx: unknown) => Promise<void>) => {
+    const txInsertChain = {
+      values: vi.fn().mockReturnThis(),
+      onConflictDoUpdate: vi.fn().mockResolvedValue(undefined),
+    };
+    const tx = {
+      insert: () => txInsertChain,
+    };
+    await cb(tx);
+  });
 });
 
 describe("GET /api/steam/library", () => {
@@ -103,5 +116,31 @@ describe("GET /api/steam/library", () => {
       ["steam123"],
       expect.any(Function)
     );
+  });
+
+  it("wraps DB writes in a transaction", async () => {
+    mockAuth.mockResolvedValue({ user: { id: "user-1" } });
+    mockDbSelectLimit.mockResolvedValue([{ id: "user-1", steamId: "steam123" }]);
+    mockCachedFetch.mockResolvedValue([
+      { appid: 440, name: "TF2", playtime_forever: 100 },
+    ]);
+    mockFindMany.mockResolvedValue([]);
+
+    await GET();
+    expect(mockTransaction).toHaveBeenCalledWith(expect.any(Function));
+  });
+
+  it("returns 500 and rolls back on DB error during sync", async () => {
+    mockAuth.mockResolvedValue({ user: { id: "user-1" } });
+    mockDbSelectLimit.mockResolvedValue([{ id: "user-1", steamId: "steam123" }]);
+    mockCachedFetch.mockResolvedValue([
+      { appid: 440, name: "TF2", playtime_forever: 100 },
+    ]);
+    mockTransaction.mockRejectedValue(new Error("DB connection lost"));
+
+    const res = await GET();
+    const data = await res.json();
+    expect(res.status).toBe(500);
+    expect(data.error).toBe("Failed to sync library");
   });
 });

@@ -37,6 +37,7 @@ describe("GET /api/auth/steam/callback", () => {
   it("fetches Steam profile after successful verification", async () => {
     mockVerifySteamLogin.mockResolvedValue("76561198000000001");
     mockFetch.mockResolvedValue({
+      ok: true,
       json: () =>
         Promise.resolve({
           response: {
@@ -67,6 +68,7 @@ describe("GET /api/auth/steam/callback", () => {
   it("calls signIn with steam credentials", async () => {
     mockVerifySteamLogin.mockResolvedValue("123");
     mockFetch.mockResolvedValue({
+      ok: true,
       json: () =>
         Promise.resolve({
           response: {
@@ -99,8 +101,28 @@ describe("GET /api/auth/steam/callback", () => {
   it("handles missing profile gracefully", async () => {
     mockVerifySteamLogin.mockResolvedValue("123");
     mockFetch.mockResolvedValue({
+      ok: true,
       json: () => Promise.resolve({ response: { players: [] } }),
     });
+    mockSignIn.mockResolvedValue(undefined);
+
+    const req = new NextRequest(
+      "http://localhost:3000/api/auth/steam/callback?openid.mode=id_res"
+    );
+    const res = await GET(req);
+    expect(mockSignIn).toHaveBeenCalledWith("steam", {
+      steamId: "123",
+      username: "123",
+      avatarUrl: "",
+      profileUrl: "",
+      redirect: false,
+    });
+    expect(res.status).toBe(307);
+  });
+
+  it("handles Steam profile API failure", async () => {
+    mockVerifySteamLogin.mockResolvedValue("123");
+    mockFetch.mockResolvedValue({ ok: false, status: 500 });
     mockSignIn.mockResolvedValue(undefined);
 
     const req = new NextRequest(

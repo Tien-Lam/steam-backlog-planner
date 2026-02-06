@@ -16,6 +16,7 @@ async function getSteamProfile(steamId: string): Promise<SteamPlayer | null> {
   const res = await fetch(
     `https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v0002/?key=${apiKey}&steamids=${steamId}`
   );
+  if (!res.ok) return null;
   const data = await res.json();
   return data.response?.players?.[0] ?? null;
 }

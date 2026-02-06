@@ -24,8 +24,14 @@ vi.mock("@/lib/db", () => {
   };
 });
 
+vi.mock("@/lib/db/schema", () => ({
+  gameStatusEnum: {
+    enumValues: ["backlog", "playing", "completed", "abandoned"],
+  },
+}));
+
 vi.mock("drizzle-orm", () => ({
-  eq: vi.fn((_col, val) => val),
+  eq: vi.fn((_col: unknown, val: unknown) => val),
   and: vi.fn((...args: unknown[]) => args),
 }));
 
@@ -82,5 +88,45 @@ describe("PATCH /api/games", () => {
     const req = makeRequest({ steamAppId: 440, status: "completed", priority: 1 });
     const res = await PATCH(req);
     expect(res.status).toBe(200);
+  });
+
+  it("returns 400 for invalid status", async () => {
+    mockAuth.mockResolvedValue({ user: { id: "user-1" } });
+    const req = makeRequest({ steamAppId: 440, status: "invalid_status" });
+    const res = await PATCH(req);
+    const data = await res.json();
+    expect(res.status).toBe(400);
+    expect(data.error).toBe("Invalid status");
+  });
+
+  it("returns 400 for negative priority", async () => {
+    mockAuth.mockResolvedValue({ user: { id: "user-1" } });
+    const req = makeRequest({ steamAppId: 440, priority: -1 });
+    const res = await PATCH(req);
+    const data = await res.json();
+    expect(res.status).toBe(400);
+    expect(data.error).toBe("Invalid priority");
+  });
+
+  it("returns 400 for non-integer priority", async () => {
+    mockAuth.mockResolvedValue({ user: { id: "user-1" } });
+    const req = makeRequest({ steamAppId: 440, priority: 3.5 });
+    const res = await PATCH(req);
+    const data = await res.json();
+    expect(res.status).toBe(400);
+    expect(data.error).toBe("Invalid priority");
+  });
+
+  it("returns 400 for invalid JSON body", async () => {
+    mockAuth.mockResolvedValue({ user: { id: "user-1" } });
+    const req = new NextRequest("http://localhost:3000/api/games", {
+      method: "PATCH",
+      body: "not json",
+      headers: { "Content-Type": "application/json" },
+    });
+    const res = await PATCH(req);
+    const data = await res.json();
+    expect(res.status).toBe(400);
+    expect(data.error).toBe("Invalid JSON");
   });
 });

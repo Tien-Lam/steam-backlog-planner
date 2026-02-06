@@ -43,6 +43,11 @@ describe("getPlayerSummary", () => {
     });
     expect(await getPlayerSummary("123")).toBeNull();
   });
+
+  it("returns null on non-ok response", async () => {
+    mockFetch.mockResolvedValue({ ok: false, status: 500 });
+    expect(await getPlayerSummary("123")).toBeNull();
+  });
 });
 
 describe("getOwnedGames", () => {
@@ -62,6 +67,11 @@ describe("getOwnedGames", () => {
       ok: true,
       json: () => Promise.resolve({ response: {} }),
     });
+    expect(await getOwnedGames("123")).toEqual([]);
+  });
+
+  it("returns empty array on non-ok response", async () => {
+    mockFetch.mockResolvedValue({ ok: false, status: 503 });
     expect(await getOwnedGames("123")).toEqual([]);
   });
 });
