@@ -1,7 +1,58 @@
 # Steam Backlog Planner - Implementation Handover
 
 ## Session Summary
-Phase 2 (Hardening + Game Management) is fully implemented. All 3 Phase 1 code review issues + 5 Phase 2 review issues resolved, plus 5 feature stages complete. 144 tests passing across 20 files, all coverage thresholds met.
+Phase 3 (Calendar & Scheduling) is fully implemented. 258 tests passing across 32 files, all coverage thresholds met. Six code review findings from Phase 3: four fixed in-session (CR-014–016, CR-018), two deferred (CR-013 LOW, CR-017 MEDIUM).
+
+## Completed - Phase 3: Calendar & Scheduling
+
+### Pre-Phase 3 Hardening ✅
+- **CR-006**: Timezone validation against `Intl.supportedValuesOf('timeZone')`
+- **CR-007**: Cache null sentinel pattern (`{ __cacheNull: true }`) to prevent redundant API calls
+- **CR-009**: Batch priority endpoint (`PATCH /api/games/batch`) replacing N parallel requests
+
+### Stage 1: Scheduling Services ✅
+- **`src/lib/utils/date.ts`**: `formatSessionTime`, `formatSessionDate`, `getWeekDays`, `durationMinutes`, `formatDuration` — timezone-aware helpers
+- **`src/lib/services/ical.ts`**: `generateICalendar()` — RFC 5545 iCal generation with proper CRLF, character escaping, VTIMEZONE support
+- **`src/lib/services/scheduler.ts`**: `generateSchedule()` — greedy forward-fill algorithm distributing backlog games across weekday evenings (19:00) and weekend afternoons (14:00), using HLTB time estimates
+- 32 tests (11 date + 7 iCal + 14 scheduler)
+
+### Stage 2: Session API Routes ✅
+- **`src/app/api/sessions/route.ts`**: GET (date range filter with game cache join) + POST (full validation, crypto.randomUUID)
+- **`src/app/api/sessions/[sessionId]/route.ts`**: PATCH (cross-field validation for partial updates) + DELETE (ownership check)
+- **`src/app/api/sessions/auto-generate/route.ts`**: Fetch preferences + backlog, run scheduler, bulk insert in DB transaction
+- **`src/app/api/calendar/export.ics/route.ts`**: iCal export with Content-Type: text/calendar
+- 40 tests (13 sessions + 14 sessionId + 9 auto-generate + 4 iCal export)
+
+### Stage 3: Session Hooks ✅
+- **`src/lib/hooks/use-sessions.ts`**: `useSessions`, `useCreateSession`, `useUpdateSession`, `useDeleteSession`, `useAutoGenerateSessions` — all invalidate `["sessions"]` query cache
+- 10 tests
+
+### Stage 4-5: UI Components & Page ✅
+- **`src/components/schedule/session-card.tsx`**: Game image, time range, duration badge, complete/edit/delete actions
+- **`src/components/schedule/session-form-dialog.tsx`**: Create/edit with timezone-aware local↔UTC conversion (key-based form reset)
+- **`src/components/schedule/auto-schedule-dialog.tsx`**: Start date, weeks (1-12), clear existing option
+- **`src/components/schedule/calendar-view.tsx`**: Week/month tabs, session grid, DayPicker with session indicators
+- **`src/app/(dashboard)/schedule/page.tsx`**: Schedule page
+- **`src/components/nav.tsx`**: Added "Schedule" nav link
+- 19 tests (9 session-card + 5 form-dialog + 5 auto-schedule)
+
+### Phase 3 Code Review ✅
+- **CR-014 HIGH** (fixed): Timezone bug in session form — added `timezone` prop with `fromZonedTime`/`toZonedTime`
+- **CR-015 MEDIUM-HIGH** (fixed): Cross-field validation gap in PATCH — fetch existing session for merged validation
+- **CR-016 MEDIUM** (fixed): Missing notes length validation — added 2000 char limit
+- **CR-018 MEDIUM** (fixed): Race condition in clearExisting — wrapped in `db.transaction()`
+- **CR-013 LOW** (deferred): HLTB data never expires in DB — fix in Phase 4
+- **CR-017 MEDIUM** (deferred): Auto-generate lacks rate limiting — fix in Phase 4
+
+### Test Results
+| Metric | Phase 1 | Phase 2 | Phase 3 | Threshold |
+|--------|---------|---------|---------|-----------|
+| Test files | 13 | 20 | 32 | — |
+| Tests | 94 | 144 | 258 | — |
+| Statements | 97.43% | 94.01% | 95.26% | 80% |
+| Branches | 89.31% | 85.24% | 88.07% | 80% |
+| Functions | 93.87% | 89.15% | 88.28% | 80% |
+| Lines | 98.86% | 95.98% | 96.77% | 80% |
 
 ## Completed - Phase 2: Hardening + Game Management
 
@@ -109,19 +160,30 @@ steam-backlog-planner/
 │   │       ├── steam/achievements/[appId]/route.ts
 │   │       ├── games/route.ts
 │   │       ├── hltb/[appId]/route.ts
+│   │       ├── games/batch/route.ts
+│   │       ├── sessions/route.ts
+│   │       ├── sessions/[sessionId]/route.ts
+│   │       ├── sessions/auto-generate/route.ts
+│   │       ├── calendar/export.ics/route.ts
 │   │       └── preferences/route.ts
 │   ├── components/
 │   │   ├── nav.tsx
-│   │   ├── ui/                              (14 shadcn components)
-│   │   └── games/
-│   │       ├── game-card.tsx
-│   │       ├── game-grid.tsx
-│   │       └── backlog-prioritizer.tsx
+│   │   ├── ui/                              (16 shadcn components)
+│   │   ├── games/
+│   │   │   ├── game-card.tsx
+│   │   │   ├── game-grid.tsx
+│   │   │   └── backlog-prioritizer.tsx
+│   │   └── schedule/
+│   │       ├── session-card.tsx
+│   │       ├── session-form-dialog.tsx
+│   │       ├── auto-schedule-dialog.tsx
+│   │       └── calendar-view.tsx
 │   └── lib/
 │       ├── auth/{index,steam-provider,types}.ts
 │       ├── db/{index,schema}.ts
-│       ├── services/{steam,cache,hltb}.ts
-│       ├── hooks/{use-library,use-game-detail,use-preferences,use-priority}.ts
+│       ├── services/{steam,cache,hltb,ical,scheduler}.ts
+│       ├── hooks/{use-library,use-game-detail,use-preferences,use-priority,use-sessions}.ts
+│       ├── utils/date.ts
 │       └── providers.tsx
 ```
 
@@ -141,15 +203,10 @@ Copy `.env.example` to `.env.local` and fill in:
 2. `npm run db:push` - Push schema to Neon
 3. `npm run dev` - Start dev server
 
-## Next Steps - Phase 3: Calendar & Scheduling
-
-- [ ] Calendar component (weekly/monthly views)
-- [ ] Manual gaming session scheduling
-- [ ] Auto-schedule generator (`src/lib/services/scheduler.ts`)
-- [ ] iCal export functionality
-
 ## Next Steps - Phase 4: Statistics & Polish
 
+- [ ] CR-013: Add staleness check for HLTB data in DB cache (re-fetch if >30 days)
+- [ ] CR-017: Add rate limiting to auto-generate endpoint
 - [ ] Statistics dashboard with charts
 - [ ] Playtime analytics and completion predictions
 - [ ] Mobile responsive design refinement
