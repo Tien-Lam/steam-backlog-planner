@@ -196,6 +196,13 @@ Copy `.env.example` to `.env.local` and fill in:
 
 ## Next Steps - Phase 2: Game Management
 
+### Hardening (do first — before new features)
+- [ ] **CR-001**: Wrap library sync DB writes in a transaction (`src/app/api/steam/library/route.ts`)
+- [ ] **CR-002**: Add `res.ok` checks to all Steam API fetch calls (`src/lib/services/steam.ts`, `src/app/api/auth/steam/callback/route.ts`)
+- [ ] **CR-003**: Validate `status` enum and `priority` type in PATCH /api/games (`src/app/api/games/route.ts`)
+- [ ] Update tests for all three fixes, move entries to "Resolved" in `CODE_REVIEW.md`
+
+### Features
 - [ ] HowLongToBeat integration (`src/lib/services/hltb.ts`) using `howlongtobeat` package
 - [ ] Game detail pages with HLTB/achievement data (`src/app/(dashboard)/library/[appId]/page.tsx`)
 - [ ] Backlog prioritization with drag & drop

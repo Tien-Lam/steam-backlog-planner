@@ -44,6 +44,18 @@ npm run db:generate  # Generate migrations
 - Mock chained Drizzle queries: each method returns `this`, terminal method returns mock data
 - Next.js 16 route params are `Promise<{}>`: `{ params: Promise.resolve({ appId: "440" }) }`
 
+## Session Workflow
+1. Read `HANDOVER.md` at session start for context
+2. Do the work
+3. Run `npm test` and `npm run test:coverage` before committing
+4. Run a code review on all changed files — check for security issues, missing error handling, logic bugs, and data integrity risks
+5. Log new findings in `CODE_REVIEW.md` with severity, file locations, and a target fix-by milestone
+6. Address any open findings that fall within the current session's scope (e.g., if building on affected code, fix it first)
+7. Update `HANDOVER.md` with what was done
+
+## Code Review Tracker
+`CODE_REVIEW.md` at repo root. Open issues must be fixed before building on top of the affected code. When resolving an issue, move it to the "Resolved" section with the commit that fixed it.
+
 ## Conventions
 - Conventional commits: `feat:`, `fix:`, `docs:`, `chore:`, `refactor:`, `test:`
 - Branch naming: `feature/*`, `fix/*`, `chore/*`
