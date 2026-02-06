@@ -46,12 +46,20 @@ npm run db:generate  # Generate migrations
 
 ## Session Workflow
 1. Read `HANDOVER.md` at session start for context
-2. Do the work
-3. Run `npm test` and `npm run test:coverage` before committing
-4. Run a code review on all changed files — check for security issues, missing error handling, logic bugs, and data integrity risks
-5. Log new findings in `CODE_REVIEW.md` with severity, file locations, and a target fix-by milestone
-6. Address any open findings that fall within the current session's scope (e.g., if building on affected code, fix it first)
-7. Update `HANDOVER.md` with what was done
+2. Check `CODE_REVIEW.md` for open issues — fix any that overlap with the current session's scope before building on affected code
+3. Do the work (implement features, fix bugs, etc.)
+4. Run `npm test` and `npm run test:coverage` — all tests must pass, all thresholds met
+5. Run a code review on all changed files — check for security issues, missing error handling, logic bugs, and data integrity risks
+6. Fix any HIGH/MEDIUM findings in-session; log deferred items in `CODE_REVIEW.md` with severity, file locations, and a target fix-by milestone
+7. Address any open findings that fall within the current session's scope (e.g., if building on affected code, fix it first)
+8. Create logical, granular git commits — group by feature/concern, not one big commit:
+   - Separate hardening/fixes from features from docs
+   - Each commit should be independently meaningful (tests pass at each commit)
+   - Use conventional commit messages with a short title and descriptive body explaining *why*
+   - Include `Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>` in each commit
+9. Update `HANDOVER.md` with what was done
+
+**Do NOT wait for the user to ask for code review or commits — these are mandatory steps every session.**
 
 ## Code Review Tracker
 `CODE_REVIEW.md` at repo root. Open issues must be fixed before building on top of the affected code. When resolving an issue, move it to the "Resolved" section with the commit that fixed it.
