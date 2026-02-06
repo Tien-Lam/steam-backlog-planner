@@ -117,6 +117,23 @@ describe("PATCH /api/preferences", () => {
     expect(data.error).toContain("timezone");
   });
 
+  it("rejects invalid timezone values", async () => {
+    mockAuth.mockResolvedValue({ user: { id: "user-1" } });
+    const res = await PATCH(makePatchRequest({ timezone: "Not/A/Timezone" }));
+    const data = await res.json();
+    expect(res.status).toBe(400);
+    expect(data.error).toBe("Invalid timezone");
+  });
+
+  it("accepts valid IANA timezone", async () => {
+    mockAuth.mockResolvedValue({ user: { id: "user-1" } });
+    mockDbInsertConflict.mockResolvedValue(undefined);
+    const res = await PATCH(makePatchRequest({ timezone: "America/New_York" }));
+    const data = await res.json();
+    expect(res.status).toBe(200);
+    expect(data.success).toBe(true);
+  });
+
   it("upserts preferences on valid input", async () => {
     mockAuth.mockResolvedValue({ user: { id: "user-1" } });
     mockDbInsertConflict.mockResolvedValue(undefined);

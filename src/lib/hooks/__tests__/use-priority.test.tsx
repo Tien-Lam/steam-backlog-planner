@@ -23,8 +23,11 @@ beforeEach(() => {
 });
 
 describe("useBatchUpdatePriorities", () => {
-  it("sends PATCH for each game", async () => {
-    mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ success: true }) });
+  it("sends single batch request with all updates", async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ success: true, updated: 2 }),
+    });
 
     const { result } = renderHook(() => useBatchUpdatePriorities(), {
       wrapper: createWrapper(),
@@ -36,13 +39,24 @@ describe("useBatchUpdatePriorities", () => {
     ]);
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    expect(mockFetch).toHaveBeenCalledTimes(2);
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    expect(mockFetch).toHaveBeenCalledWith("/api/games/batch", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        updates: [
+          { steamAppId: 440, priority: 2 },
+          { steamAppId: 730, priority: 1 },
+        ],
+      }),
+    });
   });
 
-  it("handles partial failure", async () => {
-    mockFetch
-      .mockResolvedValueOnce({ ok: true })
-      .mockResolvedValueOnce({ ok: false });
+  it("handles server error response", async () => {
+    mockFetch.mockResolvedValue({
+      ok: false,
+      json: () => Promise.resolve({ error: "Failed to update priorities" }),
+    });
 
     const { result } = renderHook(() => useBatchUpdatePriorities(), {
       wrapper: createWrapper(),
@@ -54,27 +68,10 @@ describe("useBatchUpdatePriorities", () => {
     ]);
 
     await waitFor(() => expect(result.current.isError).toBe(true));
-    expect(result.current.error?.message).toContain("Failed to update 1 game");
+    expect(result.current.error?.message).toContain("Failed to update");
   });
 
-  it("sends correct body for each update", async () => {
-    mockFetch.mockResolvedValue({ ok: true });
-
-    const { result } = renderHook(() => useBatchUpdatePriorities(), {
-      wrapper: createWrapper(),
-    });
-
-    result.current.mutate([{ steamAppId: 440, priority: 5 }]);
-
-    await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    expect(mockFetch).toHaveBeenCalledWith("/api/games", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ steamAppId: 440, priority: 5 }),
-    });
-  });
-
-  it("handles empty update list", async () => {
+  it("handles empty update list without fetching", async () => {
     const { result } = renderHook(() => useBatchUpdatePriorities(), {
       wrapper: createWrapper(),
     });
@@ -83,5 +80,17 @@ describe("useBatchUpdatePriorities", () => {
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  it("handles network error gracefully", async () => {
+    mockFetch.mockRejectedValue(new Error("Network error"));
+
+    const { result } = renderHook(() => useBatchUpdatePriorities(), {
+      wrapper: createWrapper(),
+    });
+
+    result.current.mutate([{ steamAppId: 440, priority: 5 }]);
+
+    await waitFor(() => expect(result.current.isError).toBe(true));
   });
 });

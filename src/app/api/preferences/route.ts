@@ -66,6 +66,10 @@ export async function PATCH(req: NextRequest) {
     if (typeof timezone !== "string" || timezone.trim() === "") {
       return NextResponse.json({ error: "timezone must be a non-empty string" }, { status: 400 });
     }
+    const validTimezones = Intl.supportedValuesOf("timeZone");
+    if (!validTimezones.includes(timezone)) {
+      return NextResponse.json({ error: "Invalid timezone" }, { status: 400 });
+    }
   }
 
   const updates: Record<string, unknown> = { updatedAt: new Date() };

@@ -12,19 +12,17 @@ export function useBatchUpdatePriorities() {
 
   return useMutation({
     mutationFn: async (updates: PriorityUpdate[]) => {
-      const results = await Promise.all(
-        updates.map(({ steamAppId, priority }) =>
-          fetch("/api/games", {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ steamAppId, priority }),
-          })
-        )
-      );
+      if (updates.length === 0) return;
 
-      const failed = results.filter((r) => !r.ok);
-      if (failed.length > 0) {
-        throw new Error(`Failed to update ${failed.length} game(s)`);
+      const res = await fetch("/api/games/batch", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ updates }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Failed to update priorities");
       }
     },
     onSuccess: () => {

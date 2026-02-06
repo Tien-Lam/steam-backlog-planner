@@ -45,16 +45,31 @@ export async function invalidateCache(
   await redis.del(key);
 }
 
+const CACHE_NULL_SENTINEL = { __cacheNull: true } as const;
+
+function isNullSentinel(value: unknown): boolean {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "__cacheNull" in value
+  );
+}
+
 export async function cachedFetch<T>(
   category: CacheCategory,
   keyParts: (string | number)[],
   fetcher: () => Promise<T>
 ): Promise<T> {
   const cached = await getCached<T>(category, ...keyParts);
+  if (isNullSentinel(cached)) return null as T;
   if (cached !== null) return cached;
 
   const fresh = await fetcher();
-  await setCache(category, fresh, ...keyParts);
+  if (fresh === null || fresh === undefined) {
+    await setCache(category, CACHE_NULL_SENTINEL as unknown, ...keyParts);
+  } else {
+    await setCache(category, fresh, ...keyParts);
+  }
   return fresh;
 }
 

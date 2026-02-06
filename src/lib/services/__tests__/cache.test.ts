@@ -90,6 +90,27 @@ describe("cachedFetch", () => {
     expect(fetcher).toHaveBeenCalledOnce();
     expect(mockSet).toHaveBeenCalledOnce();
   });
+
+  it("caches null results with sentinel to avoid re-fetching", async () => {
+    mockGet.mockResolvedValue(null);
+    mockSet.mockResolvedValue(undefined);
+    const fetcher = vi.fn().mockResolvedValue(null);
+    const result = await cachedFetch("HLTB_DATA", ["99999"], fetcher);
+    expect(result).toBeNull();
+    expect(mockSet).toHaveBeenCalledWith(
+      "sbp:HLTB_DATA:99999",
+      { __cacheNull: true },
+      { ex: TTL.HLTB_DATA }
+    );
+  });
+
+  it("returns null when sentinel is found in cache", async () => {
+    mockGet.mockResolvedValue({ __cacheNull: true });
+    const fetcher = vi.fn();
+    const result = await cachedFetch("HLTB_DATA", ["99999"], fetcher);
+    expect(result).toBeNull();
+    expect(fetcher).not.toHaveBeenCalled();
+  });
 });
 
 describe("TTL values", () => {
