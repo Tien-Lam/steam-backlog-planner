@@ -55,6 +55,11 @@ const params = Promise.resolve({ appId: "440" });
 - Run `npm run test:coverage` to verify
 - Integration tests (`npm run test:integration`) do NOT have coverage thresholds — they test real DB interactions with mocked externals, so lower coverage is expected
 
+## Integration Test Completeness
+- `error-boundaries.test.ts` scans all `route.ts` files and verifies each is in the routes array
+- When it fails: add the endpoint to the routes array AND write a flow test for it
+- Excluded: `auth/**`, `test/**` (NextAuth + E2E fixtures)
+
 ## What NOT to test
 - `src/components/ui/` (shadcn primitives)
 - `src/lib/db/index.ts` (DB client initialization)

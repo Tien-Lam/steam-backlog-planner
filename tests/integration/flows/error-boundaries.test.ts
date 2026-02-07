@@ -1,3 +1,5 @@
+import fs from "node:fs";
+import path from "node:path";
 import { describe, it, expect } from "vitest";
 import {
   makeRequest,
@@ -8,134 +10,171 @@ import {
   seedGames,
 } from "../helpers";
 
+const HTTP_METHODS = ["GET", "POST", "PATCH", "DELETE", "PUT"] as const;
+
+const routes = [
+  {
+    name: "GET /api/steam/library",
+    handler: () =>
+      import("@/app/api/steam/library/route").then((m) => m.GET()),
+  },
+  {
+    name: "GET /api/sessions",
+    handler: () =>
+      import("@/app/api/sessions/route").then((m) =>
+        m.GET(makeRequest("/api/sessions"))
+      ),
+  },
+  {
+    name: "POST /api/sessions",
+    handler: () =>
+      import("@/app/api/sessions/route").then((m) =>
+        m.POST(
+          makeJsonRequest("/api/sessions", "POST", {
+            steamAppId: 440,
+            startTime: "2025-01-01T10:00:00Z",
+            endTime: "2025-01-01T11:00:00Z",
+          })
+        )
+      ),
+  },
+  {
+    name: "POST /api/sessions/auto-generate",
+    handler: () =>
+      import("@/app/api/sessions/auto-generate/route").then((m) =>
+        m.POST(
+          makeJsonRequest("/api/sessions/auto-generate", "POST", {
+            startDate: "2025-01-06",
+            weeks: 1,
+          })
+        )
+      ),
+  },
+  {
+    name: "PATCH /api/sessions/:sessionId",
+    handler: () =>
+      import("@/app/api/sessions/[sessionId]/route").then((m) =>
+        m.PATCH(
+          makeJsonRequest("/api/sessions/abc", "PATCH", { notes: "hi" }),
+          { params: Promise.resolve({ sessionId: "abc" }) }
+        )
+      ),
+  },
+  {
+    name: "DELETE /api/sessions/:sessionId",
+    handler: () =>
+      import("@/app/api/sessions/[sessionId]/route").then((m) =>
+        m.DELETE(makeRequest("/api/sessions/abc", { method: "DELETE" }), {
+          params: Promise.resolve({ sessionId: "abc" }),
+        })
+      ),
+  },
+  {
+    name: "GET /api/preferences",
+    handler: () =>
+      import("@/app/api/preferences/route").then((m) => m.GET()),
+  },
+  {
+    name: "PATCH /api/preferences",
+    handler: () =>
+      import("@/app/api/preferences/route").then((m) =>
+        m.PATCH(
+          makeJsonRequest("/api/preferences", "PATCH", { weeklyHours: 5 })
+        )
+      ),
+  },
+  {
+    name: "PATCH /api/games",
+    handler: () =>
+      import("@/app/api/games/route").then((m) =>
+        m.PATCH(
+          makeJsonRequest("/api/games", "PATCH", {
+            steamAppId: 440,
+            status: "playing",
+          })
+        )
+      ),
+  },
+  {
+    name: "PATCH /api/games/batch",
+    handler: () =>
+      import("@/app/api/games/batch/route").then((m) =>
+        m.PATCH(
+          makeJsonRequest("/api/games/batch", "PATCH", {
+            updates: [{ steamAppId: 440, priority: 1 }],
+          })
+        )
+      ),
+  },
+  {
+    name: "GET /api/calendar/export.ics",
+    handler: () =>
+      import("@/app/api/calendar/export.ics/route").then((m) => m.GET()),
+  },
+  {
+    name: "GET /api/steam/achievements/:appId",
+    handler: () =>
+      import("@/app/api/steam/achievements/[appId]/route").then((m) =>
+        m.GET(makeRequest("/api/steam/achievements/440"), {
+          params: Promise.resolve({ appId: "440" }),
+        })
+      ),
+  },
+  {
+    name: "GET /api/hltb/:appId",
+    handler: () =>
+      import("@/app/api/hltb/[appId]/route").then((m) =>
+        m.GET(makeRequest("/api/hltb/440"), {
+          params: Promise.resolve({ appId: "440" }),
+        })
+      ),
+  },
+  {
+    name: "GET /api/statistics",
+    handler: () =>
+      import("@/app/api/statistics/route").then((m) => m.GET()),
+  },
+];
+
+function findRouteFiles(dir: string): string[] {
+  const results: string[] = [];
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      results.push(...findRouteFiles(full));
+    } else if (entry.name === "route.ts") {
+      results.push(full);
+    }
+  }
+  return results;
+}
+
+function filePathToRoutePath(filePath: string): string {
+  const apiDir = path.join("src", "app", "api");
+  const idx = filePath.indexOf(apiDir);
+  const relative = filePath.slice(idx + apiDir.length).replace(/\\/g, "/");
+  return (
+    "/api" +
+    relative
+      .replace(/\/route\.ts$/, "")
+      .replace(/\[([^\]]+)\]/g, ":$1")
+  );
+}
+
+async function getExportedMethods(
+  filePath: string
+): Promise<string[]> {
+  const mod = await import(filePath);
+  return HTTP_METHODS.filter((m) => typeof mod[m] === "function");
+}
+
+function isExcluded(filePath: string): boolean {
+  const normalized = filePath.replace(/\\/g, "/");
+  return normalized.includes("/auth/") || normalized.includes("/test/");
+}
+
 describe("Error Boundaries", () => {
   describe("Authentication — 401 on all routes when unauthenticated", () => {
-    const routes = [
-      {
-        name: "GET /api/steam/library",
-        handler: () =>
-          import("@/app/api/steam/library/route").then((m) =>
-            m.GET()
-          ),
-      },
-      {
-        name: "GET /api/sessions",
-        handler: () =>
-          import("@/app/api/sessions/route").then((m) =>
-            m.GET(makeRequest("/api/sessions"))
-          ),
-      },
-      {
-        name: "POST /api/sessions",
-        handler: () =>
-          import("@/app/api/sessions/route").then((m) =>
-            m.POST(
-              makeJsonRequest("/api/sessions", "POST", {
-                steamAppId: 440,
-                startTime: "2025-01-01T10:00:00Z",
-                endTime: "2025-01-01T11:00:00Z",
-              })
-            )
-          ),
-      },
-      {
-        name: "POST /api/sessions/auto-generate",
-        handler: () =>
-          import("@/app/api/sessions/auto-generate/route").then((m) =>
-            m.POST(
-              makeJsonRequest("/api/sessions/auto-generate", "POST", {
-                startDate: "2025-01-06",
-                weeks: 1,
-              })
-            )
-          ),
-      },
-      {
-        name: "PATCH /api/sessions/:id",
-        handler: () =>
-          import("@/app/api/sessions/[sessionId]/route").then((m) =>
-            m.PATCH(
-              makeJsonRequest("/api/sessions/abc", "PATCH", { notes: "hi" }),
-              { params: Promise.resolve({ sessionId: "abc" }) }
-            )
-          ),
-      },
-      {
-        name: "DELETE /api/sessions/:id",
-        handler: () =>
-          import("@/app/api/sessions/[sessionId]/route").then((m) =>
-            m.DELETE(makeRequest("/api/sessions/abc", { method: "DELETE" }), {
-              params: Promise.resolve({ sessionId: "abc" }),
-            })
-          ),
-      },
-      {
-        name: "GET /api/preferences",
-        handler: () =>
-          import("@/app/api/preferences/route").then((m) => m.GET()),
-      },
-      {
-        name: "PATCH /api/preferences",
-        handler: () =>
-          import("@/app/api/preferences/route").then((m) =>
-            m.PATCH(
-              makeJsonRequest("/api/preferences", "PATCH", { weeklyHours: 5 })
-            )
-          ),
-      },
-      {
-        name: "PATCH /api/games",
-        handler: () =>
-          import("@/app/api/games/route").then((m) =>
-            m.PATCH(
-              makeJsonRequest("/api/games", "PATCH", {
-                steamAppId: 440,
-                status: "playing",
-              })
-            )
-          ),
-      },
-      {
-        name: "PATCH /api/games/batch",
-        handler: () =>
-          import("@/app/api/games/batch/route").then((m) =>
-            m.PATCH(
-              makeJsonRequest("/api/games/batch", "PATCH", {
-                updates: [{ steamAppId: 440, priority: 1 }],
-              })
-            )
-          ),
-      },
-      {
-        name: "GET /api/calendar/export.ics",
-        handler: () =>
-          import("@/app/api/calendar/export.ics/route").then((m) => m.GET()),
-      },
-      {
-        name: "GET /api/steam/achievements/:appId",
-        handler: () =>
-          import("@/app/api/steam/achievements/[appId]/route").then((m) =>
-            m.GET(makeRequest("/api/steam/achievements/440"), {
-              params: Promise.resolve({ appId: "440" }),
-            })
-          ),
-      },
-      {
-        name: "GET /api/hltb/:appId",
-        handler: () =>
-          import("@/app/api/hltb/[appId]/route").then((m) =>
-            m.GET(makeRequest("/api/hltb/440"), {
-              params: Promise.resolve({ appId: "440" }),
-            })
-          ),
-      },
-      {
-        name: "GET /api/statistics",
-        handler: () =>
-          import("@/app/api/statistics/route").then((m) => m.GET()),
-      },
-    ];
-
     for (const route of routes) {
       it(`${route.name} returns 401`, async () => {
         authAsNone();
@@ -260,6 +299,57 @@ describe("Error Boundaries", () => {
         })
       );
       expect(res.status).toBe(400);
+    });
+  });
+
+  describe("Completeness", () => {
+    const routeNames = new Set(routes.map((r) => r.name));
+    const apiRoot = path.resolve("src", "app", "api");
+
+    it("routes array covers all authenticated API endpoints", async () => {
+      const routeFiles = findRouteFiles(apiRoot);
+      const missing: string[] = [];
+
+      for (const file of routeFiles) {
+        if (isExcluded(file)) continue;
+
+        const routePath = filePathToRoutePath(file);
+        const methods = await getExportedMethods(file);
+
+        for (const method of methods) {
+          const entry = `${method} ${routePath}`;
+          if (!routeNames.has(entry)) {
+            missing.push(entry);
+          }
+        }
+      }
+
+      expect(
+        missing,
+        `Missing from routes array:\n${missing.map((m) => `  - ${m}`).join("\n")}`
+      ).toEqual([]);
+    });
+
+    it("routes array has no stale entries", async () => {
+      const routeFiles = findRouteFiles(apiRoot);
+      const diskEndpoints = new Set<string>();
+
+      for (const file of routeFiles) {
+        if (isExcluded(file)) continue;
+
+        const routePath = filePathToRoutePath(file);
+        const methods = await getExportedMethods(file);
+        for (const method of methods) {
+          diskEndpoints.add(`${method} ${routePath}`);
+        }
+      }
+
+      const stale = [...routeNames].filter((r) => !diskEndpoints.has(r));
+
+      expect(
+        stale,
+        `Stale entries in routes array:\n${stale.map((s) => `  - ${s}`).join("\n")}`
+      ).toEqual([]);
     });
   });
 });
