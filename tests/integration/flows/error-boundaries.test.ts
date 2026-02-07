@@ -129,6 +129,11 @@ describe("Error Boundaries", () => {
             })
           ),
       },
+      {
+        name: "GET /api/statistics",
+        handler: () =>
+          import("@/app/api/statistics/route").then((m) => m.GET()),
+      },
     ];
 
     for (const route of routes) {

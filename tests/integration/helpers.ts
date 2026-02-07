@@ -4,6 +4,7 @@ import {
   userPreferences,
   userGames,
   gameCache,
+  userAchievements,
   scheduledSessions,
 } from "@/lib/db/schema";
 import { NextRequest } from "next/server";
@@ -99,6 +100,26 @@ export async function seedSession(
     completed: session.completed ?? false,
   });
   return id;
+}
+
+interface SeedAchievementOptions {
+  steamAppId: number;
+  achievedCount: number;
+  totalCount: number;
+}
+
+export async function seedAchievements(
+  userId: string,
+  achievements: SeedAchievementOptions[]
+) {
+  for (const ach of achievements) {
+    await db.insert(userAchievements).values({
+      userId,
+      steamAppId: ach.steamAppId,
+      achievedCount: ach.achievedCount,
+      totalCount: ach.totalCount,
+    });
+  }
 }
 
 export function makeRequest(url: string, init?: RequestInit): NextRequest {
