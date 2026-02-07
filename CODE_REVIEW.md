@@ -4,21 +4,27 @@ Tracked issues from end-of-session code reviews. Fix before building on top of a
 
 ## Open
 
-### CR-013: DB-cached HLTB data never expires [LOW]
-- **File**: `src/app/api/hltb/[appId]/route.ts` (line 34)
-- **Found**: Phase 2 review
-- **Fix by**: Phase 4 (low priority, data rarely changes)
-- **Issue**: The HLTB route checks `game.hltbMainMinutes !== null` to return cached data, but never checks `cachedAt` freshness. Redis cache has 7-day TTL, but the DB-level cache is permanent.
-- **Fix**: Add a staleness check (e.g., re-fetch if `cachedAt` older than 30 days).
+(No open issues)
+
+## Resolved
+
+### CR-020: Library sync errors silently swallowed [LOW]
+- **File**: `src/app/api/steam/library/route.ts`
+- **Found**: E2E testing session
+- **Resolved**: Phase 4 (commit d64db15)
+- **Fix**: Added `console.error("[Library Sync] Failed for user", userId, error)` in catch block
 
 ### CR-017: Auto-generate endpoint lacks rate limiting [MEDIUM]
 - **File**: `src/app/api/sessions/auto-generate/route.ts`
 - **Found**: Phase 3 review
-- **Fix by**: Phase 4 (before production deployment)
-- **Issue**: The auto-generate endpoint can create 100+ sessions per request. No rate limiting exists to prevent abuse.
-- **Fix**: Add rate limiting middleware or per-user throttling (e.g., max 1 auto-generate request per 10 seconds).
+- **Resolved**: Phase 4 (commit 0099307)
+- **Fix**: Added per-user Redis rate limit (3 req/60s) via INCR/EXPIRE. Always sets TTL, wrapped in try-catch for Redis failure resilience.
 
-## Resolved
+### CR-013: DB-cached HLTB data never expires [LOW]
+- **File**: `src/app/api/hltb/[appId]/route.ts`
+- **Found**: Phase 2 review
+- **Resolved**: Phase 4 (commit e0d6417)
+- **Fix**: Added 30-day staleness check on `cachedAt` — re-fetches HLTB data when cache is older than 30 days or when `cachedAt` is null.
 
 ### CR-014: Timezone bug in session form dialog [HIGH]
 - **File**: `src/components/schedule/session-form-dialog.tsx`

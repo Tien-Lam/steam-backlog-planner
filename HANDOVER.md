@@ -1,19 +1,47 @@
 # Steam Backlog Planner - Implementation Handover
 
 ## Session Summary
-E2E testing plan completed. Wrote schedule.spec.ts (8 tests) and full-workflow.spec.ts (1 test). Set up Neon Postgres + Upstash Redis for E2E testing. All 19 E2E tests passing, 259 unit tests passing, 42 integration tests passing. Discovered and fixed Neon HTTP driver transaction limitation with insert-before-delete pattern.
+Phase 4 complete: Fixed all 3 deferred code review items (CR-013, CR-017, CR-020) and built the statistics dashboard with 4 Recharts-based chart components, a statistics API endpoint, and supporting hooks. All 293 tests passing across 38 files. Coverage: 92.46% stmts, 86.58% branches, 88.74% funcs, 93.64% lines.
 
-## Next Session TODO — Phase 4: Statistics & Polish
+## Next Session TODO — Phase 5: Polish & External Integrations
 
-### Open Code Review Items
-1. **CR-013 LOW**: HLTB data never expires in DB cache — add staleness check (re-fetch if >30 days)
-2. **CR-017 MEDIUM**: Auto-generate endpoint lacks rate limiting — add per-user throttling
-3. **CR-020 LOW**: Library sync errors silently swallowed — add logging in catch block
-
-### Phase 4 Features
-- [ ] Statistics dashboard with charts (playtime by game, completion rates)
-- [ ] Playtime analytics and completion predictions
+### Polish
 - [ ] Mobile responsive design refinement
+- [ ] Dashboard page content (currently just a placeholder)
+- [ ] Loading/error states UX improvements
+
+### Phase 5 Features
+- [ ] Google Calendar OAuth and two-way sync
+- [ ] Discord webhook notifications
+- [ ] IGDB integration for additional metadata
+
+## Completed — Phase 4: Statistics Dashboard
+
+### Code Review Fixes ✅
+- **CR-013**: HLTB staleness check — re-fetches if cachedAt >30 days or null
+- **CR-017**: Rate limiting auto-generate — 3 req/60s per user via Redis INCR/EXPIRE, fail-open on Redis errors
+- **CR-020**: Library sync error logging — console.error with user ID and error object
+
+### Statistics Feature ✅
+- **`src/app/api/statistics/route.ts`**: GET endpoint returning per-game and overall achievement percentages
+- **`src/lib/hooks/use-statistics.ts`**: `computeLibraryStats()` (pure), `useLibraryStats()`, `useAchievementStats()`
+- **4 chart components** in `src/components/statistics/`:
+  - `status-chart.tsx` — Recharts PieChart (donut) showing library status breakdown
+  - `playtime-chart.tsx` — Recharts BarChart (horizontal) for top 10 games by playtime
+  - `completion-predictions.tsx` — Summary cards + per-game Progress bars with HLTB time remaining
+  - `achievement-overview.tsx` — Overall achievement % + per-game achievement progress
+- **`src/app/(dashboard)/statistics/page.tsx`**: 2-column responsive grid with loading skeletons
+- **Nav**: Added "Statistics" link between Schedule and Settings
+
+### Test Results
+| Metric | Phase 3 | Phase 4 | Threshold |
+|--------|---------|---------|-----------|
+| Test files | 32 | 38 | — |
+| Tests | 259 | 293 | — |
+| Statements | 95.26% | 92.46% | 80% |
+| Branches | 88.07% | 86.58% | 80% |
+| Functions | 88.28% | 88.74% | 80% |
+| Lines | 96.77% | 93.64% | 80% |
 
 ### Key Context
 - **Neon HTTP limitation**: `@neondatabase/serverless`'s `neon()` driver does NOT support `db.transaction()`. All DB writes use sequential operations. Auto-generate uses insert-before-delete pattern for safety.
@@ -211,6 +239,7 @@ steam-backlog-planner/
 │   │   │   ├── library/
 │   │   │   │   ├── page.tsx                (tabbed: grid + prioritizer)
 │   │   │   │   └── [appId]/page.tsx        (game detail)
+│   │   │   ├── statistics/page.tsx         (charts dashboard)
 │   │   │   └── settings/page.tsx
 │   │   └── api/
 │   │       ├── auth/steam/{route,callback/route}.ts
@@ -223,6 +252,7 @@ steam-backlog-planner/
 │   │       ├── sessions/[sessionId]/route.ts
 │   │       ├── sessions/auto-generate/route.ts
 │   │       ├── calendar/export.ics/route.ts
+│   │       ├── statistics/route.ts
 │   │       └── preferences/route.ts
 │   ├── components/
 │   │   ├── nav.tsx
@@ -231,16 +261,21 @@ steam-backlog-planner/
 │   │   │   ├── game-card.tsx
 │   │   │   ├── game-grid.tsx
 │   │   │   └── backlog-prioritizer.tsx
-│   │   └── schedule/
-│   │       ├── session-card.tsx
-│   │       ├── session-form-dialog.tsx
-│   │       ├── auto-schedule-dialog.tsx
-│   │       └── calendar-view.tsx
+│   │   ├── schedule/
+│   │   │   ├── session-card.tsx
+│   │   │   ├── session-form-dialog.tsx
+│   │   │   ├── auto-schedule-dialog.tsx
+│   │   │   └── calendar-view.tsx
+│   │   └── statistics/
+│   │       ├── status-chart.tsx
+│   │       ├── playtime-chart.tsx
+│   │       ├── completion-predictions.tsx
+│   │       └── achievement-overview.tsx
 │   └── lib/
 │       ├── auth/{index,steam-provider,types}.ts
 │       ├── db/{index,schema}.ts
 │       ├── services/{steam,cache,hltb,ical,scheduler}.ts
-│       ├── hooks/{use-library,use-game-detail,use-preferences,use-priority,use-sessions}.ts
+│       ├── hooks/{use-library,use-game-detail,use-preferences,use-priority,use-sessions,use-statistics}.ts
 │       ├── utils/date.ts
 │       └── providers.tsx
 ```
@@ -261,15 +296,13 @@ Copy `.env.example` to `.env.local` and fill in:
 2. `npm run db:push` - Push schema to Neon
 3. `npm run dev` - Start dev server
 
-## Next Steps - Phase 4: Statistics & Polish
+## Next Steps - Phase 5: Polish & Integrations
 
-- [ ] CR-013: Add staleness check for HLTB data in DB cache (re-fetch if >30 days)
-- [ ] CR-017: Add rate limiting to auto-generate endpoint
-- [ ] Statistics dashboard with charts
-- [ ] Playtime analytics and completion predictions
 - [ ] Mobile responsive design refinement
+- [ ] Dashboard page content
+- [ ] Loading/error states UX improvements
 
-## Next Steps - Phase 5: External Integrations
+## Next Steps - Phase 6: External Integrations
 
 - [ ] Google Calendar OAuth and two-way sync
 - [ ] Discord webhook notifications
