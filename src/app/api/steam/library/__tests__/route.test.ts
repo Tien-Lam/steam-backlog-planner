@@ -4,7 +4,7 @@ const mockAuth = vi.fn();
 const mockDbSelectLimit = vi.fn();
 const mockFindMany = vi.fn();
 const mockCachedFetch = vi.fn();
-const mockTransaction = vi.fn();
+const mockInsertOnConflict = vi.fn();
 
 vi.mock("@/lib/auth", () => ({
   auth: () => mockAuth(),
@@ -18,13 +18,12 @@ vi.mock("@/lib/db", () => {
   };
   const insertChain = {
     values: vi.fn().mockReturnThis(),
-    onConflictDoUpdate: vi.fn().mockResolvedValue(undefined),
+    onConflictDoUpdate: (...args: unknown[]) => mockInsertOnConflict(...args),
   };
   return {
     db: {
       select: () => selectChain,
       insert: () => insertChain,
-      transaction: (...args: unknown[]) => mockTransaction(...args),
       query: {
         userGames: {
           findMany: (...args: unknown[]) => mockFindMany(...args),
@@ -58,17 +57,8 @@ beforeEach(() => {
   mockDbSelectLimit.mockReset();
   mockFindMany.mockReset();
   mockCachedFetch.mockReset();
-  mockTransaction.mockReset();
-  mockTransaction.mockImplementation(async (cb: (tx: unknown) => Promise<void>) => {
-    const txInsertChain = {
-      values: vi.fn().mockReturnThis(),
-      onConflictDoUpdate: vi.fn().mockResolvedValue(undefined),
-    };
-    const tx = {
-      insert: () => txInsertChain,
-    };
-    await cb(tx);
-  });
+  mockInsertOnConflict.mockReset();
+  mockInsertOnConflict.mockResolvedValue(undefined);
 });
 
 describe("GET /api/steam/library", () => {
@@ -118,7 +108,7 @@ describe("GET /api/steam/library", () => {
     );
   });
 
-  it("wraps DB writes in a transaction", async () => {
+  it("upserts game cache and user games for each synced game", async () => {
     mockAuth.mockResolvedValue({ user: { id: "user-1" } });
     mockDbSelectLimit.mockResolvedValue([{ id: "user-1", steamId: "steam123" }]);
     mockCachedFetch.mockResolvedValue([
@@ -127,20 +117,36 @@ describe("GET /api/steam/library", () => {
     mockFindMany.mockResolvedValue([]);
 
     await GET();
-    expect(mockTransaction).toHaveBeenCalledWith(expect.any(Function));
+    // Two onConflictDoUpdate calls per game: one for gameCache, one for userGames
+    expect(mockInsertOnConflict).toHaveBeenCalledTimes(2);
   });
 
-  it("returns 500 and rolls back on DB error during sync", async () => {
+  it("falls through to DB read when sync fails", async () => {
+    mockAuth.mockResolvedValue({ user: { id: "user-1" } });
+    mockDbSelectLimit.mockResolvedValue([{ id: "user-1", steamId: "steam123" }]);
+    mockCachedFetch.mockRejectedValue(new Error("Steam API unavailable"));
+    const existingGames = [{ steamAppId: 440, status: "backlog" }];
+    mockFindMany.mockResolvedValue(existingGames);
+
+    const res = await GET();
+    const data = await res.json();
+    expect(res.status).toBe(200);
+    expect(data).toEqual(existingGames);
+  });
+
+  it("falls through to DB read when insert fails", async () => {
     mockAuth.mockResolvedValue({ user: { id: "user-1" } });
     mockDbSelectLimit.mockResolvedValue([{ id: "user-1", steamId: "steam123" }]);
     mockCachedFetch.mockResolvedValue([
       { appid: 440, name: "TF2", playtime_forever: 100 },
     ]);
-    mockTransaction.mockRejectedValue(new Error("DB connection lost"));
+    mockInsertOnConflict.mockRejectedValue(new Error("DB connection lost"));
+    const existingGames = [{ steamAppId: 440, status: "backlog" }];
+    mockFindMany.mockResolvedValue(existingGames);
 
     const res = await GET();
     const data = await res.json();
-    expect(res.status).toBe(500);
-    expect(data.error).toBe("Failed to sync library");
+    expect(res.status).toBe(200);
+    expect(data).toEqual(existingGames);
   });
 });

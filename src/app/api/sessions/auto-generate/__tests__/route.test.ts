@@ -54,6 +54,7 @@ vi.mock("@/lib/db", () => {
 vi.mock("drizzle-orm", () => ({
   eq: vi.fn((_c: unknown, v: unknown) => v),
   and: vi.fn((...args: unknown[]) => args),
+  notInArray: vi.fn((_c: unknown, v: unknown) => ({ notIn: v })),
 }));
 
 vi.mock("@/lib/services/scheduler", () => ({
@@ -149,7 +150,7 @@ describe("POST /api/sessions/auto-generate", () => {
     expect(mockDbInsertValues).toHaveBeenCalled();
   });
 
-  it("clears existing sessions when clearExisting is true", async () => {
+  it("inserts first then deletes old sessions when clearExisting is true", async () => {
     mockAuth.mockResolvedValue({ user: { id: "user-1" } });
     mockGenerateSchedule.mockReturnValue([
       {
@@ -165,6 +166,8 @@ describe("POST /api/sessions/auto-generate", () => {
       makeRequest({ startDate: "2025-03-17", weeks: 1, clearExisting: true })
     );
     expect(res.status).toBe(201);
+    // Insert happens before delete (safe ordering)
+    expect(mockDbInsertValues).toHaveBeenCalled();
     expect(mockDbDelete).toHaveBeenCalled();
   });
 

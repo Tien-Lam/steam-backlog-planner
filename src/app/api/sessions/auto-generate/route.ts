@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db, scheduledSessions, userGames, userPreferences, gameCache } from "@/lib/db";
-import { eq, and } from "drizzle-orm";
+import { eq, and, notInArray } from "drizzle-orm";
 import { generateSchedule } from "@/lib/services/scheduler";
 
 export async function POST(req: NextRequest) {
@@ -96,14 +96,21 @@ export async function POST(req: NextRequest) {
   }));
 
   try {
-    await db.transaction(async (tx) => {
-      if (clearExisting) {
-        await tx
-          .delete(scheduledSessions)
-          .where(eq(scheduledSessions.userId, session.user!.id!));
-      }
-      await tx.insert(scheduledSessions).values(toInsert);
-    });
+    // Insert new sessions first to avoid data loss if the operation fails midway.
+    // (Neon HTTP driver doesn't support transactions.)
+    await db.insert(scheduledSessions).values(toInsert);
+
+    if (clearExisting) {
+      const newIds = toInsert.map((s) => s.id);
+      await db
+        .delete(scheduledSessions)
+        .where(
+          and(
+            eq(scheduledSessions.userId, session.user!.id!),
+            notInArray(scheduledSessions.id, newIds)
+          )
+        );
+    }
   } catch {
     return NextResponse.json({ error: "Failed to save sessions" }, { status: 500 });
   }
