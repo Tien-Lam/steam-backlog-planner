@@ -47,12 +47,13 @@ vi.mock("next/image", () => ({
 const params = Promise.resolve({ appId: "440" });
 ```
 
-## Coverage Requirements
+## Coverage Requirements (Unit Tests Only)
 - Lines: 80%+
 - Branches: 80%+
 - Functions: 80%+
 - Statements: 80%+
 - Run `npm run test:coverage` to verify
+- Integration tests (`npm run test:integration`) do NOT have coverage thresholds — they test real DB interactions with mocked externals, so lower coverage is expected
 
 ## What NOT to test
 - `src/components/ui/` (shadcn primitives)

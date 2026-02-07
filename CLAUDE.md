@@ -17,8 +17,9 @@ npm run dev          # Dev server
 npm run build        # Production build
 npm test             # Run all tests
 npm run test:watch   # Watch mode
-npm run test:coverage # Coverage report (80% threshold)
-npm run lint         # ESLint
+npm run test:coverage    # Coverage report (80% threshold, unit tests only)
+npm run test:integration # Integration tests (PGlite, no coverage threshold)
+npm run lint             # ESLint
 npm run db:push      # Push schema to DB
 npm run db:generate  # Generate migrations
 ```
@@ -30,7 +31,7 @@ npm run db:generate  # Generate migrations
 - **Framework**: Vitest with jsdom
 - **Colocated tests**: `__tests__/` directories next to source files
 - **Pattern**: `src/**/__tests__/**/*.test.{ts,tsx}`
-- **Coverage**: v8 provider, 80% thresholds (lines/branches/functions/statements)
+- **Coverage**: v8 provider, 80% thresholds (lines/branches/functions/statements) — unit tests only; integration tests have no coverage threshold
 - **Skip testing**: `src/components/ui/`, `src/lib/db/index.ts`, `src/lib/auth/types.ts`, `src/lib/providers.tsx`
 - Every new module must have corresponding tests
 - Mock all externals (fetch, Redis, DB, auth) — no real API calls in tests
