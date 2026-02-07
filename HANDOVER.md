@@ -1,7 +1,7 @@
 # Steam Backlog Planner - Implementation Handover
 
 ## Session Summary
-Phase 4 complete: Fixed all 3 deferred code review items (CR-013, CR-017, CR-020) and built the statistics dashboard with 4 Recharts-based chart components, a statistics API endpoint, and supporting hooks. All 293 tests passing across 38 files. Coverage: 92.46% stmts, 86.58% branches, 88.74% funcs, 93.64% lines.
+Phase 4 hardening complete: Code reviewed all Phase 4 files, found and fixed 2 issues (CR-021, CR-022), added statistics API integration tests (5 tests + 1 error boundary). All 293 unit tests + 48 integration tests passing. Coverage: 92.47% stmts, 86.53% branches, 88.81% funcs, 93.65% lines.
 
 ## Next Session TODO — Phase 5: Polish & External Integrations
 
@@ -14,6 +14,18 @@ Phase 4 complete: Fixed all 3 deferred code review items (CR-013, CR-017, CR-020
 - [ ] Google Calendar OAuth and two-way sync
 - [ ] Discord webhook notifications
 - [ ] IGDB integration for additional metadata
+
+## Completed — Phase 4 Hardening
+
+### Code Review ✅
+- **CR-021 MEDIUM** (fixed): Library sync reset `cachedAt` on every visit, defeating HLTB staleness check (CR-013). Removed `cachedAt` from library sync's `onConflictDoUpdate`.
+- **CR-022 LOW** (fixed): `totalPlayed` in completion predictions derived from clamped remaining time, underreporting when users overplayed HLTB estimates. Now uses `playedMinutes` directly.
+
+### Integration Tests ✅
+- **`tests/integration/flows/statistics.test.ts`** (5 tests): Empty state, multi-game aggregation, zero-division, cross-user isolation, fallback game name
+- **`tests/integration/flows/error-boundaries.test.ts`**: Added `GET /api/statistics` 401 check
+- **`tests/integration/helpers.ts`**: Added `seedAchievements` helper
+- Total: 48 integration tests across 7 files (up from 42 across 6 files)
 
 ## Completed — Phase 4: Statistics Dashboard
 
@@ -80,7 +92,7 @@ Phase 4 complete: Fixed all 3 deferred code review items (CR-013, CR-017, CR-020
 | Suite | Files | Tests | Status |
 |-------|-------|-------|--------|
 | Unit tests | 32 | 259 | ✅ All pass |
-| Integration tests | 6 | 42 | ✅ All pass |
+| Integration tests | 7 | 48 | ✅ All pass |
 | E2E tests | 4+1 setup | 19 | ✅ All pass |
 
 ### Bugs Found & Fixed During E2E Testing
