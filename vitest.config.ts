@@ -20,6 +20,7 @@ export default defineConfig({
       include: [
         "src/lib/**",
         "src/components/games/**",
+        "src/components/statistics/**",
         "src/components/nav.tsx",
         "src/app/api/**",
       ],

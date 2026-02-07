@@ -53,6 +53,7 @@ describe("Nav", () => {
     expect(screen.getByText("Dashboard")).toBeInTheDocument();
     expect(screen.getByText("Library")).toBeInTheDocument();
     expect(screen.getByText("Schedule")).toBeInTheDocument();
+    expect(screen.getByText("Statistics")).toBeInTheDocument();
     expect(screen.getByText("Settings")).toBeInTheDocument();
   });
 
