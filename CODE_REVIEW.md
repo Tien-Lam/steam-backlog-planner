@@ -41,8 +41,22 @@ Tracked issues from end-of-session code reviews. Fix before building on top of a
 ### CR-018: Race condition in auto-generate clearExisting [MEDIUM]
 - **File**: `src/app/api/sessions/auto-generate/route.ts`
 - **Found**: Phase 3 review
-- **Resolved**: Phase 3 hardening
-- **Fix**: Wrapped delete + insert in `db.transaction()` so both succeed or fail together
+- **Resolved**: E2E testing session (insert-before-delete)
+- **History**: Originally fixed with `db.transaction()` in Phase 3. Regressed when Neon HTTP driver was discovered to not support transactions (CR-019). Re-fixed with insert-before-delete pattern: new sessions are inserted first, then old sessions are deleted by excluding new IDs via `notInArray`. This ensures data safety — if insert fails, old sessions remain intact.
+
+### CR-019: Transaction removal reintroduced CR-018 race condition [HIGH]
+- **File**: `src/app/api/sessions/auto-generate/route.ts`
+- **Found**: E2E testing session code review
+- **Resolved**: E2E testing session (same commit as CR-018 re-fix)
+- **Issue**: Neon HTTP driver (`neon()` from `@neondatabase/serverless`) threw "No transactions support in neon-http driver" at runtime. Removing `db.transaction()` reintroduced the delete-before-insert race condition where delete succeeds but insert fails, losing all user sessions.
+- **Fix**: Reversed operation order to insert-before-delete with `notInArray` exclusion. If insert fails, old sessions remain. If delete fails after insert, user has duplicates (much less harmful than data loss).
+
+### CR-020: Library sync errors silently swallowed [LOW]
+- **File**: `src/app/api/steam/library/route.ts` (line 69)
+- **Found**: E2E testing session code review
+- **Fix by**: Phase 4 (non-critical — endpoint still returns existing DB data)
+- **Issue**: The catch block swallows all errors without logging. Partial sync failures (e.g., some games upserted, some failed) are invisible to operators.
+- **Recommendation**: Add `console.error` or structured logging in the catch block.
 
 ### CR-006: Timezone validation accepts arbitrary strings [MEDIUM]
 - **File**: `src/app/api/preferences/route.ts`
@@ -65,8 +79,8 @@ Tracked issues from end-of-session code reviews. Fix before building on top of a
 ### CR-001: Library sync lacks transaction boundary [HIGH]
 - **File**: `src/app/api/steam/library/route.ts`
 - **Found**: Phase 1 review
-- **Resolved**: Phase 2 hardening
-- **Fix**: Wrapped DB writes in `db.transaction()`, added try-catch returning 500 on failure
+- **Resolved**: Phase 2 hardening → E2E testing session (revised)
+- **Fix**: Originally wrapped in `db.transaction()`. Revised to try-catch with sequential upserts + fallback to existing DB data, since Neon HTTP driver doesn't support transactions. Library sync uses idempotent `onConflictDoUpdate` upserts, so partial sync is safe — no data loss risk.
 
 ### CR-002: Steam API calls don't check response status [MEDIUM]
 - **Files**: `src/lib/services/steam.ts`, `src/app/api/auth/steam/callback/route.ts`
