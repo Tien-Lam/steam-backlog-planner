@@ -1,23 +1,24 @@
 # Steam Backlog Planner - Implementation Handover
 
 ## Session Summary
-Integration testing infrastructure added. 258 unit tests + 42 integration tests all passing. Playwright E2E infrastructure set up with auth bypass and seed endpoint; 2 of 4 spec files written (settings, library). Paused mid-implementation due to usage limits.
+E2E testing plan completed. Wrote schedule.spec.ts (8 tests) and full-workflow.spec.ts (1 test). Set up Neon Postgres + Upstash Redis for E2E testing. All 19 E2E tests passing, 259 unit tests passing, 42 integration tests passing. Discovered and fixed Neon HTTP driver transaction limitation with insert-before-delete pattern.
 
-## Next Session TODO — Finish Integration Testing Plan
+## Next Session TODO — Phase 4: Statistics & Polish
 
-### Remaining Playwright E2E Work
-1. **Write `tests/e2e/schedule.spec.ts`** (~7 tests): empty state, create session dialog, auto-generate, week/month navigation, iCal export download, edit/delete session
-2. **Write `tests/e2e/full-workflow.spec.ts`** (~1 test): settings → library → prioritize → auto-generate → view schedule
-3. **Run E2E tests** against live dev server: `npm run test:e2e` — requires `DATABASE_URL` and other env vars in `.env.local`
-4. **Debug any E2E failures** — the auth.setup.ts flow (CSRF → test-login → storage state) hasn't been verified against a live server yet; may need adjustments to the login flow or selectors in specs
-5. **Add unit tests for the test seed endpoint** (`src/app/api/test/seed/route.ts`) if coverage is affected
+### Open Code Review Items
+1. **CR-013 LOW**: HLTB data never expires in DB cache — add staleness check (re-fetch if >30 days)
+2. **CR-017 MEDIUM**: Auto-generate endpoint lacks rate limiting — add per-user throttling
+3. **CR-020 LOW**: Library sync errors silently swallowed — add logging in catch block
 
-### Key Context for Continuing
-- Playwright config is at `playwright.config.ts`, webServer starts `cross-env E2E_TESTING=true npm run dev`
-- Auth bypass: `test-login` Credentials provider in `src/lib/auth/index.ts` (line 62-75), only active when `E2E_TESTING=true`
-- Seed endpoint: `POST /api/test/seed` with scenarios `"default"`, `"with-library"`, `"full"` — test user ID is `"e2e-test-user"`
-- Existing specs reference UI elements by role/text — adjust selectors if they don't match actual rendered markup
-- The `tests/e2e/.auth/` directory is gitignored (stores Playwright auth state)
+### Phase 4 Features
+- [ ] Statistics dashboard with charts (playtime by game, completion rates)
+- [ ] Playtime analytics and completion predictions
+- [ ] Mobile responsive design refinement
+
+### Key Context
+- **Neon HTTP limitation**: `@neondatabase/serverless`'s `neon()` driver does NOT support `db.transaction()`. All DB writes use sequential operations. Auto-generate uses insert-before-delete pattern for safety.
+- **E2E auth**: `test-login` Credentials provider gated behind `E2E_TESTING=true`. Seed endpoint at `POST /api/test/seed` with scenarios `"default"`, `"with-library"`, `"full"`.
+- **drizzle.config.ts**: Uses `config({ path: ".env.local" })` — not `import "dotenv/config"` which only loads `.env`.
 
 ## In Progress - Integration & E2E Testing
 
@@ -34,14 +35,13 @@ Integration testing infrastructure added. 258 unit tests + 42 integration tests 
   - `timezone-handling.test.ts` (5): Asia/Tokyo, America/Los_Angeles, UTC, manual session round-trip
 - **Key insight**: `vi.restoreAllMocks()` doesn't clear standalone `vi.fn()` call history — use `vi.hoisted()` for shared mock fns and track call count manually
 
-### Layer 2: Playwright E2E Tests (Partial) 🔨
+### Layer 2: Playwright E2E Tests ✅
 - **Installed**: `@playwright/test`, `cross-env`, Chromium browser
 - **`playwright.config.ts`**: Chromium-only, single worker, dev server with `E2E_TESTING=true`
 - **`src/lib/auth/index.ts`**: Added test-only `test-login` Credentials provider gated behind `E2E_TESTING=true`
 - **`src/app/api/test/seed/route.ts`**: Seed endpoint with 3 scenarios (default, with-library, full) — returns 403 when `E2E_TESTING !== "true"`
 - **`tests/e2e/auth.setup.ts`**: Seeds user, authenticates via test-login, saves storage state
-- **Completed specs**: `settings.spec.ts` (4 tests), `library.spec.ts` (5 tests)
-- **TODO specs**: `schedule.spec.ts`, `full-workflow.spec.ts`
+- **Completed specs**: `settings.spec.ts` (4 tests), `library.spec.ts` (5 tests), `schedule.spec.ts` (8 tests), `full-workflow.spec.ts` (1 test)
 
 ### npm Scripts Added
 - `npm run test:integration` — runs PGlite integration tests
@@ -51,9 +51,15 @@ Integration testing infrastructure added. 258 unit tests + 42 integration tests 
 ### Test Results
 | Suite | Files | Tests | Status |
 |-------|-------|-------|--------|
-| Unit tests | 32 | 258 | ✅ All pass |
+| Unit tests | 32 | 259 | ✅ All pass |
 | Integration tests | 6 | 42 | ✅ All pass |
-| E2E tests | 2 | 9 | 🔨 Not run (needs dev server + DB) |
+| E2E tests | 4+1 setup | 19 | ✅ All pass |
+
+### Bugs Found & Fixed During E2E Testing
+- **Neon HTTP transactions**: `neon()` driver doesn't support `db.transaction()`. Replaced with insert-before-delete pattern in auto-generate and sequential upserts in library sync.
+- **Library sync resilience**: Wrapped Steam API sync in try-catch so library endpoint returns existing DB data when Steam API key is missing or API fails.
+- **E2E selectors**: Fixed strict mode violations (`.first()` on multi-match locators), dialog title conflicts (`getByRole('heading')` instead of `getByText`), Next.js Dev Tools button conflict (exact `"Next →"` text).
+- **drizzle.config.ts**: Changed to load `.env.local` instead of `.env`.
 
 ## Completed - Phase 3: Calendar & Scheduling
 
@@ -71,7 +77,7 @@ Integration testing infrastructure added. 258 unit tests + 42 integration tests 
 ### Stage 2: Session API Routes ✅
 - **`src/app/api/sessions/route.ts`**: GET (date range filter with game cache join) + POST (full validation, crypto.randomUUID)
 - **`src/app/api/sessions/[sessionId]/route.ts`**: PATCH (cross-field validation for partial updates) + DELETE (ownership check)
-- **`src/app/api/sessions/auto-generate/route.ts`**: Fetch preferences + backlog, run scheduler, bulk insert in DB transaction
+- **`src/app/api/sessions/auto-generate/route.ts`**: Fetch preferences + backlog, run scheduler, insert-before-delete (Neon HTTP doesn't support transactions)
 - **`src/app/api/calendar/export.ics/route.ts`**: iCal export with Content-Type: text/calendar
 - 40 tests (13 sessions + 14 sessionId + 9 auto-generate + 4 iCal export)
 
@@ -92,7 +98,7 @@ Integration testing infrastructure added. 258 unit tests + 42 integration tests 
 - **CR-014 HIGH** (fixed): Timezone bug in session form — added `timezone` prop with `fromZonedTime`/`toZonedTime`
 - **CR-015 MEDIUM-HIGH** (fixed): Cross-field validation gap in PATCH — fetch existing session for merged validation
 - **CR-016 MEDIUM** (fixed): Missing notes length validation — added 2000 char limit
-- **CR-018 MEDIUM** (fixed): Race condition in clearExisting — wrapped in `db.transaction()`
+- **CR-018 MEDIUM** (fixed): Race condition in clearExisting — insert-before-delete pattern (Neon HTTP doesn't support transactions)
 - **CR-013 LOW** (deferred): HLTB data never expires in DB — fix in Phase 4
 - **CR-017 MEDIUM** (deferred): Auto-generate lacks rate limiting — fix in Phase 4
 
