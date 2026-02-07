@@ -1,9 +1,22 @@
 # Steam Backlog Planner - Implementation Handover
 
 ## Session Summary
-Phase 4 hardening complete: Code reviewed all Phase 4 files, found and fixed 2 issues (CR-021, CR-022), added statistics API integration tests (5 tests + 1 error boundary). All 293 unit tests + 48 integration tests passing. Coverage: 92.47% stmts, 86.53% branches, 88.81% funcs, 93.65% lines.
+Added integration test completeness meta-test: two tests in `error-boundaries.test.ts` that scan all `route.ts` files on disk and verify every authenticated endpoint has a corresponding entry in the routes array (and no stale entries exist). This catches missing integration tests when new endpoints are added. Also fixed `:id` → `:sessionId` naming mismatch in routes array. All 293 unit tests + 50 integration tests passing. Coverage unchanged (92.47% stmts, 86.53% branches, 88.81% funcs, 93.65% lines).
 
-## Next Session TODO — Phase 5: Polish & External Integrations
+## URGENT: Rotate All Credentials
+All `.env.local` secrets were exposed in a conversation. Rotate these BEFORE deploying anywhere:
+- [ ] Neon DB password (Neon console)
+- [ ] Upstash Redis token (Upstash console)
+- [ ] AUTH_SECRET (`openssl rand -base64 32`)
+- [ ] Steam API key (https://steamcommunity.com/dev/apikey)
+
+## Next Session TODO — Real Steam Smoke Test
+1. `npm run db:push` to push schema to Neon
+2. `npm run dev` and test every feature with a real Steam account
+3. Fix whatever breaks (large libraries, null fields, unicode, HLTB mismatches, etc.)
+4. Run all test suites after fixing to verify no regressions
+
+## Future — Phase 5: Polish & External Integrations
 
 ### Polish
 - [ ] Mobile responsive design refinement
@@ -23,9 +36,9 @@ Phase 4 hardening complete: Code reviewed all Phase 4 files, found and fixed 2 i
 
 ### Integration Tests ✅
 - **`tests/integration/flows/statistics.test.ts`** (5 tests): Empty state, multi-game aggregation, zero-division, cross-user isolation, fallback game name
-- **`tests/integration/flows/error-boundaries.test.ts`**: Added `GET /api/statistics` 401 check
+- **`tests/integration/flows/error-boundaries.test.ts`**: Added `GET /api/statistics` 401 check + completeness meta-tests (2 tests verifying all endpoints covered, no stale entries)
 - **`tests/integration/helpers.ts`**: Added `seedAchievements` helper
-- Total: 48 integration tests across 7 files (up from 42 across 6 files)
+- Total: 50 integration tests across 7 files (up from 42 across 6 files)
 
 ## Completed — Phase 4: Statistics Dashboard
 
