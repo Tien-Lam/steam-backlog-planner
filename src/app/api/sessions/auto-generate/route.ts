@@ -3,11 +3,23 @@ import { auth } from "@/lib/auth";
 import { db, scheduledSessions, userGames, userPreferences, gameCache } from "@/lib/db";
 import { eq, and, notInArray } from "drizzle-orm";
 import { generateSchedule } from "@/lib/services/scheduler";
+import { redis } from "@/lib/services/cache";
 
 export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  try {
+    const rateLimitKey = `sbp:ratelimit:autogen:${session.user.id}`;
+    const count = await redis.incr(rateLimitKey);
+    await redis.expire(rateLimitKey, 60);
+    if (count > 3) {
+      return NextResponse.json({ error: "Rate limit exceeded" }, { status: 429 });
+    }
+  } catch {
+    // Rate limit check failed — allow request rather than blocking user
   }
 
   let body;

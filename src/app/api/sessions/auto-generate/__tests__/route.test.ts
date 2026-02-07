@@ -7,6 +7,8 @@ const mockBacklogLeftJoin = vi.fn();
 const mockDbDelete = vi.fn();
 const mockDbInsertValues = vi.fn();
 const mockGenerateSchedule = vi.fn();
+const mockRedisIncr = vi.fn();
+const mockRedisExpire = vi.fn();
 
 vi.mock("@/lib/auth", () => ({
   auth: () => mockAuth(),
@@ -61,10 +63,19 @@ vi.mock("@/lib/services/scheduler", () => ({
   generateSchedule: (...args: unknown[]) => mockGenerateSchedule(...args),
 }));
 
+vi.mock("@/lib/services/cache", () => ({
+  redis: {
+    incr: (...args: unknown[]) => mockRedisIncr(...args),
+    expire: (...args: unknown[]) => mockRedisExpire(...args),
+  },
+}));
+
 import { POST } from "../route";
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mockRedisIncr.mockResolvedValue(1);
+  mockRedisExpire.mockResolvedValue(true);
   mockPrefsLimit.mockResolvedValue([{
     weeklyHours: 10,
     sessionLengthMinutes: 60,
@@ -169,6 +180,50 @@ describe("POST /api/sessions/auto-generate", () => {
     // Insert happens before delete (safe ordering)
     expect(mockDbInsertValues).toHaveBeenCalled();
     expect(mockDbDelete).toHaveBeenCalled();
+  });
+
+  it("returns 429 when rate limit exceeded", async () => {
+    mockAuth.mockResolvedValue({ user: { id: "user-1" } });
+    mockRedisIncr.mockResolvedValue(4);
+    const res = await POST(makeRequest({ startDate: "2025-03-17", weeks: 1 }));
+    expect(res.status).toBe(429);
+    const data = await res.json();
+    expect(data.error).toContain("Rate limit");
+  });
+
+  it("sets expire on every request", async () => {
+    mockAuth.mockResolvedValue({ user: { id: "user-1" } });
+    mockRedisIncr.mockResolvedValue(1);
+    mockGenerateSchedule.mockReturnValue([
+      {
+        steamAppId: 440,
+        startTime: new Date("2025-03-17T19:00:00Z"),
+        endTime: new Date("2025-03-17T20:00:00Z"),
+      },
+    ]);
+    mockDbInsertValues.mockResolvedValue(undefined);
+
+    await POST(makeRequest({ startDate: "2025-03-17", weeks: 1 }));
+    expect(mockRedisExpire).toHaveBeenCalledWith(
+      expect.stringContaining("sbp:ratelimit:autogen:"),
+      60
+    );
+  });
+
+  it("allows request when Redis rate limit fails", async () => {
+    mockAuth.mockResolvedValue({ user: { id: "user-1" } });
+    mockRedisIncr.mockRejectedValue(new Error("Redis unavailable"));
+    mockGenerateSchedule.mockReturnValue([
+      {
+        steamAppId: 440,
+        startTime: new Date("2025-03-17T19:00:00Z"),
+        endTime: new Date("2025-03-17T20:00:00Z"),
+      },
+    ]);
+    mockDbInsertValues.mockResolvedValue(undefined);
+
+    const res = await POST(makeRequest({ startDate: "2025-03-17", weeks: 1 }));
+    expect(res.status).toBe(201);
   });
 
   it("sorts backlog games by priority descending", async () => {
