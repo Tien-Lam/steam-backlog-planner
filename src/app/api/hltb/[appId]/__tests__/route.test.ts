@@ -61,7 +61,7 @@ describe("GET /api/hltb/[appId]", () => {
     expect(res.status).toBe(404);
   });
 
-  it("returns cached HLTB data if already present", async () => {
+  it("returns cached HLTB data if already present and fresh", async () => {
     mockAuth.mockResolvedValue({ user: { id: "user-1" } });
     mockDbSelectLimit.mockResolvedValue([{
       steamAppId: 440,
@@ -69,6 +69,7 @@ describe("GET /api/hltb/[appId]", () => {
       hltbMainMinutes: 600,
       hltbExtraMinutes: 1200,
       hltbCompletionistMinutes: 2400,
+      cachedAt: new Date(),
     }]);
 
     const res = await GET(makeRequest("440"), { params: Promise.resolve({ appId: "440" }) });
@@ -76,6 +77,51 @@ describe("GET /api/hltb/[appId]", () => {
     expect(res.status).toBe(200);
     expect(data.mainMinutes).toBe(600);
     expect(mockGetHLTBData).not.toHaveBeenCalled();
+  });
+
+  it("re-fetches when cache is stale (>30 days)", async () => {
+    mockAuth.mockResolvedValue({ user: { id: "user-1" } });
+    const staleDate = new Date(Date.now() - 31 * 24 * 60 * 60 * 1000);
+    mockDbSelectLimit.mockResolvedValue([{
+      steamAppId: 440,
+      name: "TF2",
+      hltbMainMinutes: 600,
+      hltbExtraMinutes: 1200,
+      hltbCompletionistMinutes: 2400,
+      cachedAt: staleDate,
+    }]);
+    mockGetHLTBData.mockResolvedValue({
+      mainMinutes: 700,
+      extraMinutes: 1300,
+      completionistMinutes: 2500,
+    });
+
+    const res = await GET(makeRequest("440"), { params: Promise.resolve({ appId: "440" }) });
+    const data = await res.json();
+    expect(res.status).toBe(200);
+    expect(data.mainMinutes).toBe(700);
+    expect(mockGetHLTBData).toHaveBeenCalledWith("TF2", 440);
+  });
+
+  it("re-fetches when cachedAt is null", async () => {
+    mockAuth.mockResolvedValue({ user: { id: "user-1" } });
+    mockDbSelectLimit.mockResolvedValue([{
+      steamAppId: 440,
+      name: "TF2",
+      hltbMainMinutes: 600,
+      cachedAt: null,
+    }]);
+    mockGetHLTBData.mockResolvedValue({
+      mainMinutes: 700,
+      extraMinutes: 1300,
+      completionistMinutes: 2500,
+    });
+
+    const res = await GET(makeRequest("440"), { params: Promise.resolve({ appId: "440" }) });
+    const data = await res.json();
+    expect(res.status).toBe(200);
+    expect(data.mainMinutes).toBe(700);
+    expect(mockGetHLTBData).toHaveBeenCalled();
   });
 
   it("fetches HLTB data when not cached", async () => {

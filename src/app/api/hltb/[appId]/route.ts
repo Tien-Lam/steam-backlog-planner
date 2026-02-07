@@ -31,7 +31,9 @@ export async function GET(
 
   const game = cached[0];
 
-  if (game.hltbMainMinutes !== null) {
+  const HLTB_STALE_MS = 30 * 24 * 60 * 60 * 1000;
+  const isFresh = game.cachedAt && (Date.now() - new Date(game.cachedAt).getTime() < HLTB_STALE_MS);
+  if (game.hltbMainMinutes !== null && isFresh) {
     return NextResponse.json({
       mainMinutes: game.hltbMainMinutes,
       extraMinutes: game.hltbExtraMinutes,
