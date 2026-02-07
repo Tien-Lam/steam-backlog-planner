@@ -41,7 +41,6 @@ export async function GET() {
           set: {
             name: game.name,
             headerImageUrl: getGameHeaderUrl(game.appid),
-            cachedAt: new Date(),
           },
         });
 

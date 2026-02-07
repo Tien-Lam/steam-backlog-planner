@@ -30,7 +30,7 @@ export function CompletionPredictions({
   }
 
   const totalHltb = predictions.reduce((s, p) => s + p.hltbMinutes, 0);
-  const totalPlayed = totalHltb - totalRemainingMinutes;
+  const totalPlayed = predictions.reduce((s, p) => s + p.playedMinutes, 0);
 
   return (
     <Card>

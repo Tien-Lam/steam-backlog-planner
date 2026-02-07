@@ -8,6 +8,20 @@ Tracked issues from end-of-session code reviews. Fix before building on top of a
 
 ## Resolved
 
+### CR-021: Library sync resets cachedAt, defeating HLTB staleness check [MEDIUM]
+- **Files**: `src/app/api/steam/library/route.ts` (line 44), `src/app/api/hltb/[appId]/route.ts` (line 35)
+- **Found**: Phase 4 hardening review
+- **Resolved**: Phase 4 hardening
+- **Issue**: Library sync's `onConflictDoUpdate` set `cachedAt: new Date()` on every visit, resetting the HLTB staleness timer. Users who visited their library regularly would never get HLTB data refreshed.
+- **Fix**: Removed `cachedAt` from library sync's update set. Now only the HLTB service updates `cachedAt` when it fetches fresh data.
+
+### CR-022: totalPlayed underreports in completion predictions [LOW]
+- **File**: `src/components/statistics/completion-predictions.tsx` (lines 32-33)
+- **Found**: Phase 4 hardening review
+- **Resolved**: Phase 4 hardening
+- **Issue**: `totalPlayed` was derived as `totalHltb - totalRemainingMinutes`. When a user played more than the HLTB estimate, `remaining` was clamped to 0 and `totalPlayed` equaled `totalHltb` instead of actual played time.
+- **Fix**: Compute from `predictions.reduce((s, p) => s + p.playedMinutes, 0)` for accurate reporting.
+
 ### CR-020: Library sync errors silently swallowed [LOW]
 - **File**: `src/app/api/steam/library/route.ts`
 - **Found**: E2E testing session
