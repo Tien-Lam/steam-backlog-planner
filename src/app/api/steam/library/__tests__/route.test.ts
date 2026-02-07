@@ -121,32 +121,40 @@ describe("GET /api/steam/library", () => {
     expect(mockInsertOnConflict).toHaveBeenCalledTimes(2);
   });
 
-  it("falls through to DB read when sync fails", async () => {
+  it("falls through to DB read when sync fails and logs error", async () => {
     mockAuth.mockResolvedValue({ user: { id: "user-1" } });
     mockDbSelectLimit.mockResolvedValue([{ id: "user-1", steamId: "steam123" }]);
-    mockCachedFetch.mockRejectedValue(new Error("Steam API unavailable"));
+    const syncError = new Error("Steam API unavailable");
+    mockCachedFetch.mockRejectedValue(syncError);
     const existingGames = [{ steamAppId: 440, status: "backlog" }];
     mockFindMany.mockResolvedValue(existingGames);
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 
     const res = await GET();
     const data = await res.json();
     expect(res.status).toBe(200);
     expect(data).toEqual(existingGames);
+    expect(consoleSpy).toHaveBeenCalledWith("[Library Sync] Failed for user", "user-1", syncError);
+    consoleSpy.mockRestore();
   });
 
-  it("falls through to DB read when insert fails", async () => {
+  it("falls through to DB read when insert fails and logs error", async () => {
     mockAuth.mockResolvedValue({ user: { id: "user-1" } });
     mockDbSelectLimit.mockResolvedValue([{ id: "user-1", steamId: "steam123" }]);
     mockCachedFetch.mockResolvedValue([
       { appid: 440, name: "TF2", playtime_forever: 100 },
     ]);
-    mockInsertOnConflict.mockRejectedValue(new Error("DB connection lost"));
+    const dbError = new Error("DB connection lost");
+    mockInsertOnConflict.mockRejectedValue(dbError);
     const existingGames = [{ steamAppId: 440, status: "backlog" }];
     mockFindMany.mockResolvedValue(existingGames);
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 
     const res = await GET();
     const data = await res.json();
     expect(res.status).toBe(200);
     expect(data).toEqual(existingGames);
+    expect(consoleSpy).toHaveBeenCalledWith("[Library Sync] Failed for user", "user-1", dbError);
+    consoleSpy.mockRestore();
   });
 });

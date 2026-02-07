@@ -66,8 +66,8 @@ export async function GET() {
           },
         });
     }
-  } catch {
-    // Steam sync failed — fall through to return existing DB data
+  } catch (error) {
+    console.error("[Library Sync] Failed for user", session.user.id, error);
   }
 
   const userGamesList = await db.query.userGames.findMany({
