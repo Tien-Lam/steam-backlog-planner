@@ -11,9 +11,7 @@ test.describe("Library Page", () => {
     await page.goto("/library");
 
     // Wait for games to appear
-    await expect(
-      page.getByText("Team Fortress 2").or(page.getByText("Elden Ring"))
-    ).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText("Team Fortress 2").first()).toBeVisible({ timeout: 10000 });
   });
 
   test("search filters games by name", async ({ page }) => {

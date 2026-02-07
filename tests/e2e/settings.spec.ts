@@ -36,7 +36,7 @@ test.describe("Settings Page", () => {
     const saveButton = page.getByRole("button", { name: /save/i });
     await saveButton.click();
 
-    await expect(page.getByText(/error|invalid|must be/i)).toBeVisible({ timeout: 5000 });
+    await expect(page.getByText(/failed|error|invalid/i)).toBeVisible({ timeout: 5000 });
   });
 
   test("timezone select is available", async ({ page }) => {
