@@ -2,23 +2,20 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { NextRequest } from "next/server";
 
 const mockAuth = vi.fn();
-const mockTxUpdate = vi.fn();
+const mockUpdate = vi.fn();
 
 vi.mock("@/lib/auth", () => ({
   auth: () => mockAuth(),
 }));
 
 vi.mock("@/lib/db", () => {
-  const txUpdateChain = {
+  const updateChain = {
     set: vi.fn().mockReturnThis(),
-    where: (...args: unknown[]) => mockTxUpdate(...args),
-  };
-  const tx = {
-    update: () => txUpdateChain,
+    where: (...args: unknown[]) => mockUpdate(...args),
   };
   return {
     db: {
-      transaction: async (fn: (tx: typeof tx) => Promise<void>) => fn(tx),
+      update: () => updateChain,
     },
     userGames: { userId: "user_id", steamAppId: "steam_app_id" },
   };
@@ -33,8 +30,8 @@ import { PATCH } from "../route";
 
 beforeEach(() => {
   mockAuth.mockReset();
-  mockTxUpdate.mockReset();
-  mockTxUpdate.mockResolvedValue(undefined);
+  mockUpdate.mockReset();
+  mockUpdate.mockResolvedValue(undefined);
 });
 
 function makeRequest(body: unknown) {
@@ -95,7 +92,7 @@ describe("PATCH /api/games/batch", () => {
     expect(res.status).toBe(400);
   });
 
-  it("updates all games in a single transaction", async () => {
+  it("updates all games sequentially", async () => {
     mockAuth.mockResolvedValue({ user: { id: "user-1" } });
     const res = await PATCH(
       makeRequest({
@@ -110,17 +107,7 @@ describe("PATCH /api/games/batch", () => {
     expect(res.status).toBe(200);
     expect(data.success).toBe(true);
     expect(data.updated).toBe(3);
-    expect(mockTxUpdate).toHaveBeenCalledTimes(3);
-  });
-
-  it("returns 500 on transaction failure", async () => {
-    mockAuth.mockResolvedValue({ user: { id: "user-1" } });
-    mockTxUpdate.mockRejectedValueOnce(new Error("DB error"));
-    const res = await PATCH(
-      makeRequest({ updates: [{ steamAppId: 440, priority: 1 }] })
-    );
-    expect(res.status).toBe(500);
-    expect((await res.json()).error).toContain("Failed to update");
+    expect(mockUpdate).toHaveBeenCalledTimes(3);
   });
 
   it("returns 400 when exceeding 500 updates", async () => {

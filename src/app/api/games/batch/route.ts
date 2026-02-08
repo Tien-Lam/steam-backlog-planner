@@ -45,22 +45,16 @@ export async function PATCH(req: NextRequest) {
     }
   }
 
-  try {
-    await db.transaction(async (tx) => {
-      for (const { steamAppId, priority } of updates) {
-        await tx
-          .update(userGames)
-          .set({ priority, updatedAt: new Date() })
-          .where(
-            and(
-              eq(userGames.userId, session.user!.id!),
-              eq(userGames.steamAppId, steamAppId)
-            )
-          );
-      }
-    });
-  } catch {
-    return NextResponse.json({ error: "Failed to update priorities" }, { status: 500 });
+  for (const { steamAppId, priority } of updates) {
+    await db
+      .update(userGames)
+      .set({ priority, updatedAt: new Date() })
+      .where(
+        and(
+          eq(userGames.userId, session.user!.id!),
+          eq(userGames.steamAppId, steamAppId)
+        )
+      );
   }
 
   return NextResponse.json({ success: true, updated: updates.length });
