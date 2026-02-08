@@ -1,6 +1,3 @@
-import dotenv from "dotenv";
-dotenv.config({ path: ".env.local" });
-
 import { vi, beforeAll, afterAll } from "vitest";
 import { liveConfig } from "./config";
 import { db, users } from "@/lib/db";

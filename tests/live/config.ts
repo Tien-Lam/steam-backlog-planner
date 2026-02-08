@@ -1,3 +1,6 @@
+import dotenv from "dotenv";
+dotenv.config({ path: ".env.local" });
+
 const REQUIRED_VARS = [
   "STEAM_API_KEY",
   "DATABASE_URL",
