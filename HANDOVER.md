@@ -1,7 +1,7 @@
 # Steam Backlog Planner - Implementation Handover
 
 ## Session Summary
-Added live integration test suite (`npm run test:live`) that hits real services — Steam API, Neon DB, Upstash Redis, and HLTB. Gated behind `LIVE_TESTS=true` with env validation. ~46 tests across 8 files covering service-level calls, DB CRUD, and full API route handler flows. Existing tests unaffected (293 unit + 50 integration still passing).
+First real run of live integration test suite. Fixed 2 infrastructure bugs (ESM import hoisting for dotenv, Vitest 4 parallel fork config). 31 of 42 tests now pass. Remaining failures are timeouts (library sync with large game libraries) and HLTB external API returning null for Portal 2. Unit tests unaffected (292 passing).
 
 ## URGENT: Rotate All Credentials
 All `.env.local` secrets were exposed in a conversation. Rotate these BEFORE deploying anywhere:
@@ -11,9 +11,12 @@ All `.env.local` secrets were exposed in a conversation. Rotate these BEFORE dep
 - [ ] Steam API key (https://steamcommunity.com/dev/apikey)
 
 ## Next Session TODO
-1. Run `npm run test:live` with real credentials to validate the suite
-2. Fix any issues discovered by live tests
-3. Begin Phase 5 polish work (mobile responsive, dashboard content, UX)
+1. Fix remaining live test failures:
+   - **Library sync timeouts**: `library-sync.test.ts` and `full-workflow.test.ts` time out at 60s/120s. Root cause: upserting hundreds of games via individual Neon HTTP calls is slow. Options: increase test timeout to 180s+, or batch upserts in the route handler.
+   - **HLTB returns null for Portal 2**: `getHLTBData("Portal 2", 620)` returns null. Investigate whether HLTB API changed or search matching is off. The 4th HLTB test ("updates gameCache DB row") passes because it handles null gracefully.
+   - **neon-crud gameCache test**: 1 of 8 tests fails — "inserts and selects gameCache with nullable HLTB fields". May be a schema/column mismatch.
+   - **game-enrichment**: All 4 tests skipped because beforeAll (which calls libraryGET) times out.
+2. Begin Phase 5 polish work (mobile responsive, dashboard content, UX)
 
 ## Future — Phase 5: Polish & External Integrations
 
@@ -26,6 +29,24 @@ All `.env.local` secrets were exposed in a conversation. Rotate these BEFORE dep
 - [ ] Google Calendar OAuth and two-way sync
 - [ ] Discord webhook notifications
 - [ ] IGDB integration for additional metadata
+
+## Completed — Live Test First Run Fixes
+
+### Bug Fixes ✅
+- **ESM import hoisting**: `dotenv.config()` in `setup.ts` was called after `config.ts` validation due to ESM import hoisting. Moved `dotenv.config({ path: ".env.local" })` into `config.ts` itself so env vars load before validation runs.
+- **Vitest 4 parallel forks**: `singleFork: true` (Vitest 3 API) was ignored in Vitest 4. Replaced with `fileParallelism: false` to run test files sequentially. This fixed all FK violation errors where one fork's `afterAll` deleted the test user while other forks were still running.
+
+### Live Test Results (first real run)
+| File | Tests | Status | Notes |
+|------|-------|--------|-------|
+| steam-api.test.ts | 7/7 | ✅ Pass | |
+| redis-cache.test.ts | 8/8 | ✅ Pass | |
+| neon-crud.test.ts | 7/8 | ⚠️ 1 fail | gameCache nullable HLTB test |
+| scheduling.test.ts | 6/6 | ✅ Pass | (was 0/6 before fixes) |
+| hltb.test.ts | 2/4 | ⚠️ 2 fail | Portal 2 HLTB returns null |
+| library-sync.test.ts | 1/4 | ❌ Timeout | 60s not enough for large libraries |
+| game-enrichment.test.ts | 0/4 | ⏭️ Skipped | beforeAll times out (calls libraryGET) |
+| full-workflow.test.ts | 0/1 | ❌ Timeout | 120s not enough |
 
 ## Completed — Live Integration Test Suite
 
