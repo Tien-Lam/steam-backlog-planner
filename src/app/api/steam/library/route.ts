@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db, users, userGames, gameCache } from "@/lib/db";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { getOwnedGames, getGameHeaderUrl } from "@/lib/services/steam";
 import { cachedFetch } from "@/lib/services/cache";
 
@@ -28,39 +28,41 @@ export async function GET() {
       getOwnedGames(steamId)
     );
 
-    for (const game of games) {
+    if (games.length > 0) {
       await db
         .insert(gameCache)
-        .values({
-          steamAppId: game.appid,
-          name: game.name,
-          headerImageUrl: getGameHeaderUrl(game.appid),
-        })
+        .values(
+          games.map((game) => ({
+            steamAppId: game.appid,
+            name: game.name,
+            headerImageUrl: getGameHeaderUrl(game.appid),
+          }))
+        )
         .onConflictDoUpdate({
           target: gameCache.steamAppId,
           set: {
-            name: game.name,
-            headerImageUrl: getGameHeaderUrl(game.appid),
+            name: sql`excluded."name"`,
+            headerImageUrl: sql`excluded."header_image_url"`,
           },
         });
 
       await db
         .insert(userGames)
-        .values({
-          userId: session.user.id,
-          steamAppId: game.appid,
-          playtimeMinutes: game.playtime_forever,
-          lastPlayed: game.rtime_last_played
-            ? new Date(game.rtime_last_played * 1000)
-            : null,
-        })
-        .onConflictDoUpdate({
-          target: [userGames.userId, userGames.steamAppId],
-          set: {
+        .values(
+          games.map((game) => ({
+            userId: session.user.id,
+            steamAppId: game.appid,
             playtimeMinutes: game.playtime_forever,
             lastPlayed: game.rtime_last_played
               ? new Date(game.rtime_last_played * 1000)
               : null,
+          }))
+        )
+        .onConflictDoUpdate({
+          target: [userGames.userId, userGames.steamAppId],
+          set: {
+            playtimeMinutes: sql`excluded."playtime_minutes"`,
+            lastPlayed: sql`excluded."last_played"`,
             updatedAt: new Date(),
           },
         });

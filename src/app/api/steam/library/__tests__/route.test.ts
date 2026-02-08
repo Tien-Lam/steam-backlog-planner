@@ -48,6 +48,7 @@ vi.mock("@/lib/services/cache", () => ({
 
 vi.mock("drizzle-orm", () => ({
   eq: vi.fn((_col: unknown, val: unknown) => val),
+  sql: (strings: TemplateStringsArray, ...values: unknown[]) => ({ strings, values }),
 }));
 
 import { GET } from "../route";
