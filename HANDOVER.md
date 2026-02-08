@@ -1,7 +1,7 @@
 # Steam Backlog Planner - Implementation Handover
 
 ## Session Summary
-Added integration test completeness meta-test: two tests in `error-boundaries.test.ts` that scan all `route.ts` files on disk and verify every authenticated endpoint has a corresponding entry in the routes array (and no stale entries exist). This catches missing integration tests when new endpoints are added. Also fixed `:id` → `:sessionId` naming mismatch in routes array. All 293 unit tests + 50 integration tests passing. Coverage unchanged (92.47% stmts, 86.53% branches, 88.81% funcs, 93.65% lines).
+Added live integration test suite (`npm run test:live`) that hits real services — Steam API, Neon DB, Upstash Redis, and HLTB. Gated behind `LIVE_TESTS=true` with env validation. ~46 tests across 8 files covering service-level calls, DB CRUD, and full API route handler flows. Existing tests unaffected (293 unit + 50 integration still passing).
 
 ## URGENT: Rotate All Credentials
 All `.env.local` secrets were exposed in a conversation. Rotate these BEFORE deploying anywhere:
@@ -10,11 +10,10 @@ All `.env.local` secrets were exposed in a conversation. Rotate these BEFORE dep
 - [ ] AUTH_SECRET (`openssl rand -base64 32`)
 - [ ] Steam API key (https://steamcommunity.com/dev/apikey)
 
-## Next Session TODO — Real Steam Smoke Test
-1. `npm run db:push` to push schema to Neon
-2. `npm run dev` and test every feature with a real Steam account
-3. Fix whatever breaks (large libraries, null fields, unicode, HLTB mismatches, etc.)
-4. Run all test suites after fixing to verify no regressions
+## Next Session TODO
+1. Run `npm run test:live` with real credentials to validate the suite
+2. Fix any issues discovered by live tests
+3. Begin Phase 5 polish work (mobile responsive, dashboard content, UX)
 
 ## Future — Phase 5: Polish & External Integrations
 
@@ -27,6 +26,35 @@ All `.env.local` secrets were exposed in a conversation. Rotate these BEFORE dep
 - [ ] Google Calendar OAuth and two-way sync
 - [ ] Discord webhook notifications
 - [ ] IGDB integration for additional metadata
+
+## Completed — Live Integration Test Suite
+
+### Infrastructure ✅
+- **`vitest.live.config.ts`**: Separate Vitest config — node environment, forks pool, singleFork, 60s test timeout, 120s hook timeout
+- **`tests/live/config.ts`**: Env validation — requires `LIVE_TESTS=true` plus `STEAM_API_KEY`, `DATABASE_URL`, `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`, `LIVE_TEST_STEAM_ID`
+- **`tests/live/setup.ts`**: dotenv load, auth-only mock, test user insert/cleanup in `beforeAll`/`afterAll`
+- **`tests/live/helpers.ts`**: Constants, auth wrappers, request builders, cleanup functions, seed helpers
+- **`npm run test:live`**: New script gated behind `cross-env LIVE_TESTS=true`
+
+### Service Tests ✅ (~20 tests)
+- **`steam-api.test.ts`** (8): Player summary, invalid ID, owned games, achievements (discovered), invalid game, schema
+- **`redis-cache.test.ts`** (8): Round-trip, invalidate, cachedFetch miss/hit, null sentinel, TTL, non-existent key, overwrite
+- **`hltb.test.ts`** (4): Known game data, non-existent game, Redis caching, DB row update
+
+### DB Tests ✅ (~8 tests)
+- **`neon-crud.test.ts`** (8): User CRUD, gameCache with nullables, FK relationships, upsert, preferences, sessions, achievements, cascade delete
+
+### Flow Tests ✅ (~18 tests)
+- **`library-sync.test.ts`** (4): Sync + DB verification, upsert idempotency, auth check
+- **`game-enrichment.test.ts`** (4): Achievements via route handler, DB persistence, HLTB fetch, invalid appId
+- **`scheduling.test.ts`** (7): Auto-generate, session listing, iCal export, clearExisting, rate limiting, auth check
+- **`full-workflow.test.ts`** (1): End-to-end: sync → backlog → enrich → schedule → list → export → stats
+
+### Cleanup Strategy
+- User-scoped DB rows: DELETE WHERE userId = 'live-test-user' (sessions, achievements, userGames, prefs)
+- gameCache: Left in place (shared metadata) or cleaned by test-specific arrays
+- Redis keys: Tracked per test, cleaned in afterEach
+- Test user: Created in beforeAll, deleted in afterAll
 
 ## Completed — Phase 4 Hardening
 
