@@ -1,15 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const mockSearch = vi.fn();
+const mockSearchHLTB = vi.fn();
 const mockCachedFetch = vi.fn();
 const mockDbUpdateWhere = vi.fn();
 
-vi.mock("howlongtobeat", () => ({
-  HowLongToBeatService: class {
-    search(...args: unknown[]) {
-      return mockSearch(...args);
-    }
-  },
+vi.mock("@/lib/services/hltb-client", () => ({
+  searchHLTB: (...args: unknown[]) => mockSearchHLTB(...args),
 }));
 
 vi.mock("@/lib/services/cache", () => ({
@@ -34,18 +30,19 @@ vi.mock("drizzle-orm", () => ({
 import { getHLTBData } from "../hltb";
 
 beforeEach(() => {
-  mockSearch.mockReset();
+  mockSearchHLTB.mockReset();
   mockCachedFetch.mockReset();
   mockDbUpdateWhere.mockReset();
 });
 
 describe("getHLTBData", () => {
-  it("returns HLTB data with hours converted to minutes", async () => {
+  it("returns HLTB data with seconds converted to minutes", async () => {
     mockCachedFetch.mockImplementation(
       async (_cat: string, _keys: unknown[], fetcher: () => Promise<unknown>) => fetcher()
     );
-    mockSearch.mockResolvedValue([
-      { gameplayMain: 10, gameplayMainExtra: 20, gameplayCompletionist: 40 },
+    // comp_main=36000s (600min), comp_plus=72000s (1200min), comp_100=144000s (2400min)
+    mockSearchHLTB.mockResolvedValue([
+      { comp_main: 36000, comp_plus: 72000, comp_100: 144000 },
     ]);
     mockDbUpdateWhere.mockResolvedValue(undefined);
 
@@ -61,7 +58,7 @@ describe("getHLTBData", () => {
     mockCachedFetch.mockImplementation(
       async (_cat: string, _keys: unknown[], fetcher: () => Promise<unknown>) => fetcher()
     );
-    mockSearch.mockResolvedValue([]);
+    mockSearchHLTB.mockResolvedValue([]);
 
     const result = await getHLTBData("Unknown Game", 99999);
     expect(result).toBeNull();
@@ -77,8 +74,8 @@ describe("getHLTBData", () => {
     mockCachedFetch.mockImplementation(
       async (_cat: string, _keys: unknown[], fetcher: () => Promise<unknown>) => fetcher()
     );
-    mockSearch.mockResolvedValue([
-      { gameplayMain: 0, gameplayMainExtra: 0, gameplayCompletionist: 0 },
+    mockSearchHLTB.mockResolvedValue([
+      { comp_main: 0, comp_plus: 0, comp_100: 0 },
     ]);
     mockDbUpdateWhere.mockResolvedValue(undefined);
 
@@ -94,8 +91,8 @@ describe("getHLTBData", () => {
     mockCachedFetch.mockImplementation(
       async (_cat: string, _keys: unknown[], fetcher: () => Promise<unknown>) => fetcher()
     );
-    mockSearch.mockResolvedValue([
-      { gameplayMain: 5, gameplayMainExtra: 10, gameplayCompletionist: 15 },
+    mockSearchHLTB.mockResolvedValue([
+      { comp_main: 18000, comp_plus: 36000, comp_100: 54000 },
     ]);
     mockDbUpdateWhere.mockResolvedValue(undefined);
 

@@ -20,10 +20,7 @@ afterEach(async () => {
 });
 
 describe("HLTB service (live)", { timeout: 45_000 }, () => {
-  // TODO: Re-enable when howlongtobeat package is fixed or replaced.
-  // The howlongtobeat@1.8.0 npm package returns 404 — HLTB changed their API.
-  // Alternative: howlongtobeat-core or direct HLTB API scraping.
-  it.skip("returns HLTB data for a well-known game (Portal 2)", async () => {
+  it("returns HLTB data for a well-known game (Portal 2)", async () => {
     const TEST_APP_ID = 620;
 
     // Seed a gameCache row so the HLTB service can update it
@@ -57,8 +54,7 @@ describe("HLTB service (live)", { timeout: 45_000 }, () => {
     expect(data).toBeNull();
   });
 
-  // TODO: Re-enable when howlongtobeat package is fixed (see test above).
-  it.skip("stores HLTB result in Redis cache", async () => {
+  it("stores HLTB result in Redis cache", async () => {
     const TEST_APP_ID = 620;
     redisKeysToClean.push(`sbp:HLTB_DATA:${TEST_APP_ID}`);
 
