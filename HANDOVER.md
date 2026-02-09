@@ -1,7 +1,7 @@
 # Steam Backlog Planner - Implementation Handover
 
 ## Session Summary
-First real run of live integration test suite. Fixed 3 infrastructure bugs (ESM import hoisting, Vitest 4 parallel forks, library sync performance) and identified upstream HLTB package failure. All 8 live test files pass: 40/42 tests pass, 2 skipped (broken HLTB upstream). Unit tests (292), integration tests (50), and coverage thresholds all unaffected.
+Replaced broken `howlongtobeat` npm package with a custom HLTB API client. HLTB changed their API from `/api/search` to `/api/finder` — both `howlongtobeat-core` and `howlongtobeat-js` were also broken. Custom client uses auth token from `/api/finder/init` and POST search to `/api/finder`. Re-enabled 2 previously skipped live tests. All 42 live tests pass, 298 unit tests pass, coverage thresholds met.
 
 ## URGENT: Rotate All Credentials
 All `.env.local` secrets were exposed in a conversation. Rotate these BEFORE deploying anywhere:
@@ -11,8 +11,8 @@ All `.env.local` secrets were exposed in a conversation. Rotate these BEFORE dep
 - [ ] Steam API key (https://steamcommunity.com/dev/apikey)
 
 ## Next Session TODO
-1. **Replace `howlongtobeat` package**: v1.8.0 returns 404 (HLTB changed their API). Replace with `howlongtobeat-core` or direct scraping, then re-enable 2 skipped live tests.
-2. Begin Phase 5 polish work (mobile responsive, dashboard content, UX)
+1. Begin Phase 5 polish work (mobile responsive, dashboard content, UX)
+2. Consider adding HLTB endpoint discovery (scrape JS bundles for search URL) as a fallback if `/api/finder` moves again
 
 ## Future — Phase 5: Polish & External Integrations
 
@@ -25,6 +25,30 @@ All `.env.local` secrets were exposed in a conversation. Rotate these BEFORE dep
 - [ ] Google Calendar OAuth and two-way sync
 - [ ] Discord webhook notifications
 - [ ] IGDB integration for additional metadata
+
+## Completed — HLTB Package Replacement
+
+### Problem
+- `howlongtobeat@1.8.0` returned 404 — HLTB changed API from `/api/search` to `/api/finder`
+- `howlongtobeat-core@1.1.1` — auth endpoint `/api/search/init` returns 404
+- `howlongtobeat-js@1.0.2` — JS bundle scraping fails to extract API key (null)
+
+### Solution ✅
+- **`src/lib/services/hltb-client.ts`** (NEW): Custom lightweight HLTB client
+  - Auth token from `GET /api/finder/init?t={timestamp}` (5min cache)
+  - Search via `POST /api/finder` with `x-auth-token` header
+  - Response fields: `comp_main`, `comp_plus`, `comp_100` in seconds
+- **`src/lib/services/hltb.ts`**: Updated to use custom client, seconds→minutes conversion
+- Removed `howlongtobeat` from `package.json` (zero npm dependencies for HLTB)
+- Re-enabled 2 skipped live tests
+
+### Test Results
+| Suite | Files | Tests | Status |
+|-------|-------|-------|--------|
+| Unit tests | 39 | 298 | ✅ All pass |
+| Integration tests | 7 | 50 | ✅ All pass |
+| Live tests | 8 | 42 (0 skip) | ✅ All pass |
+| Coverage | — | — | ✅ 92.74% stmts, 86.80% branches |
 
 ## Completed — Live Test First Run & Fixes
 
@@ -49,10 +73,10 @@ All `.env.local` secrets were exposed in a conversation. Rotate these BEFORE dep
 ### Test Suite Totals
 | Suite | Files | Tests | Status |
 |-------|-------|-------|--------|
-| Unit tests | 38 | 292 | ✅ All pass |
+| Unit tests | 39 | 298 | ✅ All pass |
 | Integration tests | 7 | 50 | ✅ All pass |
-| Live tests | 8 | 40+2skip | ✅ All pass |
-| Coverage | — | — | ✅ 92.46% stmts, 86.73% branches |
+| Live tests | 8 | 42 | ✅ All pass |
+| Coverage | — | — | ✅ 92.74% stmts, 86.80% branches |
 
 ## Completed — Live Integration Test Suite
 
@@ -354,7 +378,7 @@ steam-backlog-planner/
 │   └── lib/
 │       ├── auth/{index,steam-provider,types}.ts
 │       ├── db/{index,schema}.ts
-│       ├── services/{steam,cache,hltb,ical,scheduler}.ts
+│       ├── services/{steam,cache,hltb,hltb-client,ical,scheduler}.ts
 │       ├── hooks/{use-library,use-game-detail,use-preferences,use-priority,use-sessions,use-statistics}.ts
 │       ├── utils/date.ts
 │       └── providers.tsx
@@ -392,3 +416,4 @@ Copy `.env.example` to `.env.local` and fill in:
 
 - **Build requires env vars**: `npm run build` fails without `DATABASE_URL` set (Neon client initializes at module load). This is expected — deploy with env vars configured.
 - **Pre-existing lint warning**: `login/page.tsx` uses `<a>` for Steam auth redirect — intentional since it's an API route that redirects externally.
+- **HLTB API fragility**: Custom client uses hardcoded `/api/finder` endpoint. If HLTB changes the path again, the client will need updating. Consider adding JS bundle scraping as a fallback (see `howlongtobeat-js` for the pattern).
