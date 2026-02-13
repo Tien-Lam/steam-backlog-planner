@@ -9,6 +9,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { GameCard } from "./game-card";
 import { useLibrary, useUpdateGameStatus } from "@/lib/hooks/use-library";
@@ -17,7 +18,7 @@ import type { GameStatus } from "@/lib/db/schema";
 type SortOption = "playtime" | "name" | "lastPlayed";
 
 export function GameGrid() {
-  const { data: games, isLoading, error } = useLibrary();
+  const { data: games, isLoading, error, refetch } = useLibrary();
   const updateStatus = useUpdateGameStatus();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<GameStatus | "all">("all");
@@ -63,8 +64,11 @@ export function GameGrid() {
 
   if (error) {
     return (
-      <div className="text-center py-12 text-destructive">
-        Failed to load library. Please try again.
+      <div className="text-center py-12">
+        <p className="text-destructive mb-3">Failed to load library.</p>
+        <Button variant="outline" size="sm" onClick={() => refetch()}>
+          Try again
+        </Button>
       </div>
     );
   }
