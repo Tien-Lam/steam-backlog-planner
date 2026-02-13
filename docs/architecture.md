@@ -65,17 +65,17 @@ erDiagram
     }
 
     userPreferences {
-        uuid userId PK_FK
-        int weeklyHours "default 10"
-        int sessionLengthMinutes "default 60"
-        text timezone "default UTC"
+        uuid userId PK, FK
+        int weeklyHours
+        int sessionLengthMinutes
+        text timezone
     }
 
     userGames {
-        uuid userId PK_FK
-        int steamAppId PK_FK
-        enum status "backlog|playing|completed|abandoned"
-        int priority "default 0"
+        uuid userId PK, FK
+        int steamAppId PK, FK
+        enum status
+        int priority
         int playtimeMinutes
         timestamp lastPlayed
     }
@@ -92,8 +92,8 @@ erDiagram
     }
 
     userAchievements {
-        uuid userId PK_FK
-        int steamAppId PK_FK
+        uuid userId PK, FK
+        int steamAppId PK, FK
         int achievedCount
         int totalCount
         timestamp lastSynced
@@ -103,13 +103,22 @@ erDiagram
         uuid id PK
         uuid userId FK
         int steamAppId
-        timestamp startTime "UTC"
-        timestamp endTime "UTC"
+        timestamp startTime
+        timestamp endTime
         boolean completed
-        text notes "max 2000"
+        text notes
         timestamp createdAt
     }
 ```
+
+Defaults and enums:
+- userPreferences.weeklyHours: default 10
+- userPreferences.sessionLengthMinutes: default 60
+- userPreferences.timezone: default UTC
+- userGames.status: backlog|playing|completed|abandoned
+- userGames.priority: default 0
+- scheduledSessions.startTime/endTime: stored in UTC
+- scheduledSessions.notes: max 2000 chars
 
 ## Authentication Flow
 
