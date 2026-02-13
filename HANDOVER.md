@@ -1,7 +1,7 @@
 # Steam Backlog Planner - Implementation Handover
 
 ## Session Summary
-Replaced broken `howlongtobeat` npm package with a custom HLTB API client. HLTB changed their API from `/api/search` to `/api/finder` — both `howlongtobeat-core` and `howlongtobeat-js` were also broken. Custom client uses auth token from `/api/finder/init` and POST search to `/api/finder`. Re-enabled 2 previously skipped live tests. All 42 live tests pass, 298 unit tests pass, coverage thresholds met.
+Phase 5 polish: adaptive mobile/desktop navigation, rich dashboard page, and consistent loading/error/empty states. Nav now shows bottom tab bar with icons on mobile and full horizontal nav on desktop. Dashboard has stats cards, playtime + achievement widgets, upcoming sessions list, empty library CTA, and quick action buttons. All 315 unit tests pass, coverage 92.7%/86.9%/88.9%/93.8%.
 
 ## URGENT: Rotate All Credentials
 All `.env.local` secrets were exposed in a conversation. Rotate these BEFORE deploying anywhere:
@@ -11,17 +11,47 @@ All `.env.local` secrets were exposed in a conversation. Rotate these BEFORE dep
 - [ ] Steam API key (https://steamcommunity.com/dev/apikey)
 
 ## Next Session TODO
-1. Begin Phase 5 polish work (mobile responsive, dashboard content, UX)
+1. Continue Phase 5 polish — verify responsive design at various breakpoints manually
 2. Consider adding HLTB endpoint discovery (scrape JS bundles for search URL) as a fallback if `/api/finder` moves again
+3. Phase 6 external integrations (Google Calendar, Discord, IGDB)
 
-## Future — Phase 5: Polish & External Integrations
+## Completed — Phase 5 Polish (Navigation + Dashboard + Error States)
 
-### Polish
-- [ ] Mobile responsive design refinement
-- [ ] Dashboard page content (currently just a placeholder)
-- [ ] Loading/error states UX improvements
+### Adaptive Navigation ✅
+- **Desktop (md+)**: Full horizontal nav bar with lucide-react icons, sticky top
+- **Mobile (<md)**: Slim top bar (SBP logo + avatar dropdown) + fixed bottom tab bar with icons + labels
+- **Active state**: `isActive()` uses `startsWith()` for nested routes (e.g. `/library/440` highlights Library)
+- **Layout**: `pb-20 md:pb-6` on main content to account for bottom nav height
+- **Icons**: LayoutDashboard, Gamepad2, Calendar, BarChart3, Settings from lucide-react
 
-### Phase 5 Features
+### Dashboard Page ✅
+- **Stats row**: 4 cards — Total Games, Backlog, Playing, Completed (2×2 on mobile, 4 cols on lg)
+- **Playtime + Achievements**: Side-by-side cards with Clock/Trophy icons, shows `--` when data unavailable
+- **Upcoming sessions**: Next 5 sessions from API with game name, date, time range, timezone-aware; "View all" link when >5
+- **Empty states**: "Sync your Steam games" CTA when library empty, "Schedule some gaming time" when no sessions
+- **Error states**: Red error cards with AlertCircle icon and "Try again" button calling refetch()
+- **Quick actions**: View Library / View Schedule / View Statistics buttons with icons
+- **Performance**: Stats memoized with `useMemo`, session query key stabilized with `useState`
+
+### Error/Empty State Improvements ✅
+- **game-grid.tsx**: Error state now has retry button (was plain text)
+- **Dashboard**: Full loading/error/empty coverage for games, sessions, and achievements
+
+### Code Review
+- **MEDIUM fixed**: StatCard displayed `0` when data unavailable — changed to `--`
+- **LOW fixed**: Nav active state used strict equality — now uses `startsWith()` for nested routes
+- **LOW fixed**: Stats computation not memoized — wrapped in `useMemo`
+- No new HIGH issues found
+
+### Test Results
+| Suite | Files | Tests | Status |
+|-------|-------|-------|--------|
+| Unit tests | 40 | 315 | ✅ All pass |
+| Coverage | — | — | ✅ 92.7% stmts, 86.9% branches, 88.9% funcs, 93.8% lines |
+
+## Future — Phase 6: External Integrations
+
+### Features
 - [ ] Google Calendar OAuth and two-way sync
 - [ ] Discord webhook notifications
 - [ ] IGDB integration for additional metadata
