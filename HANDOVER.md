@@ -1,7 +1,7 @@
 # Steam Backlog Planner - Implementation Handover
 
 ## Session Summary
-Phase 5 polish: adaptive mobile/desktop navigation, rich dashboard page, and consistent loading/error/empty states. Nav now shows bottom tab bar with icons on mobile and full horizontal nav on desktop. Dashboard has stats cards, playtime + achievement widgets, upcoming sessions list, empty library CTA, and quick action buttons. All 315 unit tests pass, coverage 92.7%/86.9%/88.9%/93.8%.
+Phase 5 polish: adaptive mobile/desktop navigation, rich dashboard page, and consistent loading/error/empty states. Added E2E tests for dashboard and responsive nav, plus fixed a bug where `src/app/page.tsx` (default Next.js template) was shadowing the dashboard at `/`. All 315 unit tests pass, 35 E2E tests pass, coverage 92.7%/86.9%/88.9%/93.8%.
 
 ## URGENT: Rotate All Credentials
 All `.env.local` secrets were exposed in a conversation. Rotate these BEFORE deploying anywhere:
@@ -43,10 +43,18 @@ All `.env.local` secrets were exposed in a conversation. Rotate these BEFORE dep
 - **LOW fixed**: Stats computation not memoized — wrapped in `useMemo`
 - No new HIGH issues found
 
+### Bug Fix
+- Removed `src/app/page.tsx` (default Next.js template) that was shadowing `(dashboard)/page.tsx` at `/`
+
+### E2E Tests Added
+- **`dashboard.spec.ts`** (10 tests): Welcome header, stat cards, playtime, achievements, empty sessions, quick actions, upcoming sessions after auto-generate, empty library CTA with navigation
+- **`nav-responsive.spec.ts`** (7 tests): Desktop nav links visible/functional, mobile bottom nav hidden on desktop, mobile bottom nav visible/functional at 375×812, desktop nav hidden on mobile, content not hidden behind bottom nav
+
 ### Test Results
 | Suite | Files | Tests | Status |
 |-------|-------|-------|--------|
 | Unit tests | 40 | 315 | ✅ All pass |
+| E2E tests | 6 | 35 | ✅ All pass |
 | Coverage | — | — | ✅ 92.7% stmts, 86.9% branches, 88.9% funcs, 93.8% lines |
 
 ## Future — Phase 6: External Integrations
