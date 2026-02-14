@@ -134,6 +134,11 @@ const routes = [
     handler: () =>
       import("@/app/api/statistics/route").then((m) => m.GET()),
   },
+  {
+    name: "POST /api/discord/test",
+    handler: () =>
+      import("@/app/api/discord/test/route").then((m) => m.POST()),
+  },
 ];
 
 function findRouteFiles(dir: string): string[] {
