@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { db, scheduledSessions } from "@/lib/db";
+import { db, scheduledSessions, gameCache } from "@/lib/db";
 import { eq, and } from "drizzle-orm";
+import { notifySessionCompleted } from "@/lib/services/discord-notify";
 
 export async function PATCH(
   req: NextRequest,
@@ -100,6 +101,22 @@ export async function PATCH(
 
   if (result.length === 0) {
     return NextResponse.json({ error: "Session not found" }, { status: 404 });
+  }
+
+  if (completed === true) {
+    const cacheRows = await db
+      .select({ name: gameCache.name, headerImageUrl: gameCache.headerImageUrl })
+      .from(gameCache)
+      .where(eq(gameCache.steamAppId, result[0].steamAppId))
+      .limit(1);
+
+    const game = cacheRows[0];
+    if (game) {
+      notifySessionCompleted(session.user.id, {
+        gameName: game.name,
+        headerImageUrl: game.headerImageUrl,
+      }).catch((err) => console.error(`[Discord] Session ${sessionId} completion notify failed:`, err));
+    }
   }
 
   return NextResponse.json(result[0]);

@@ -3,7 +3,9 @@ import { NextRequest } from "next/server";
 
 const mockAuth = vi.fn();
 const mockDbSelectLeftJoin = vi.fn();
+const mockDbSelectLimit = vi.fn();
 const mockDbInsertValues = vi.fn();
+const mockNotifySessionCreated = vi.fn();
 
 vi.mock("@/lib/auth", () => ({
   auth: () => mockAuth(),
@@ -14,6 +16,7 @@ vi.mock("@/lib/db", () => {
     from: vi.fn().mockReturnThis(),
     where: vi.fn().mockReturnThis(),
     leftJoin: (...args: unknown[]) => mockDbSelectLeftJoin(...args),
+    limit: (...args: unknown[]) => mockDbSelectLimit(...args),
   };
   const insertChain = {
     values: (...args: unknown[]) => mockDbInsertValues(...args),
@@ -29,7 +32,7 @@ vi.mock("@/lib/db", () => {
       steamAppId: "steam_app_id",
       id: "id",
     },
-    gameCache: { steamAppId: "steam_app_id" },
+    gameCache: { steamAppId: "steam_app_id", name: "name", headerImageUrl: "header_image_url" },
   };
 });
 
@@ -40,10 +43,15 @@ vi.mock("drizzle-orm", () => ({
   lte: vi.fn((_c: unknown, v: unknown) => ({ lte: v })),
 }));
 
+vi.mock("@/lib/services/discord-notify", () => ({
+  notifySessionCreated: (...args: unknown[]) => mockNotifySessionCreated(...args),
+}));
+
 import { GET, POST } from "../route";
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mockNotifySessionCreated.mockResolvedValue(undefined);
 });
 
 describe("GET /api/sessions", () => {
@@ -173,6 +181,7 @@ describe("POST /api/sessions", () => {
   it("creates a session successfully", async () => {
     mockAuth.mockResolvedValue({ user: { id: "user-1" } });
     mockDbInsertValues.mockResolvedValue(undefined);
+    mockDbSelectLimit.mockResolvedValue([{ name: "TF2", headerImageUrl: "http://img.jpg" }]);
 
     const res = await POST(
       makeRequest({
@@ -185,6 +194,43 @@ describe("POST /api/sessions", () => {
     const data = await res.json();
     expect(res.status).toBe(201);
     expect(data.id).toBeDefined();
+  });
+
+  it("fires Discord notification after creating a session", async () => {
+    mockAuth.mockResolvedValue({ user: { id: "user-1" } });
+    mockDbInsertValues.mockResolvedValue(undefined);
+    mockDbSelectLimit.mockResolvedValue([{ name: "TF2", headerImageUrl: "http://img.jpg" }]);
+
+    await POST(
+      makeRequest({
+        steamAppId: 440,
+        startTime: "2025-03-15T18:00:00Z",
+        endTime: "2025-03-15T19:00:00Z",
+      })
+    );
+
+    expect(mockNotifySessionCreated).toHaveBeenCalledWith("user-1", {
+      gameName: "TF2",
+      headerImageUrl: "http://img.jpg",
+      startTime: new Date("2025-03-15T18:00:00Z"),
+      endTime: new Date("2025-03-15T19:00:00Z"),
+    });
+  });
+
+  it("skips Discord notification when no game cache", async () => {
+    mockAuth.mockResolvedValue({ user: { id: "user-1" } });
+    mockDbInsertValues.mockResolvedValue(undefined);
+    mockDbSelectLimit.mockResolvedValue([]);
+
+    await POST(
+      makeRequest({
+        steamAppId: 440,
+        startTime: "2025-03-15T18:00:00Z",
+        endTime: "2025-03-15T19:00:00Z",
+      })
+    );
+
+    expect(mockNotifySessionCreated).not.toHaveBeenCalled();
   });
 
   it("returns 400 for invalid JSON", async () => {

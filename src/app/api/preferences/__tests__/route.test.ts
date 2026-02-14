@@ -32,6 +32,11 @@ vi.mock("drizzle-orm", () => ({
   eq: vi.fn((_col: unknown, val: unknown) => val),
 }));
 
+vi.mock("@/lib/services/discord", () => ({
+  isValidDiscordWebhookUrl: (url: string) =>
+    /^https:\/\/(discord\.com|discordapp\.com)\/api\/webhooks\//.test(url),
+}));
+
 import { GET, PATCH } from "../route";
 
 beforeEach(() => {
@@ -66,6 +71,8 @@ describe("GET /api/preferences", () => {
       weeklyHours: 10,
       sessionLengthMinutes: 60,
       timezone: "UTC",
+      discordWebhookUrl: null,
+      discordNotificationsEnabled: false,
     });
   });
 
@@ -76,6 +83,8 @@ describe("GET /api/preferences", () => {
       weeklyHours: 20,
       sessionLengthMinutes: 90,
       timezone: "America/New_York",
+      discordWebhookUrl: "https://discord.com/api/webhooks/123/abc",
+      discordNotificationsEnabled: true,
     }]);
 
     const res = await GET();
@@ -83,6 +92,8 @@ describe("GET /api/preferences", () => {
     expect(data.weeklyHours).toBe(20);
     expect(data.sessionLengthMinutes).toBe(90);
     expect(data.timezone).toBe("America/New_York");
+    expect(data.discordWebhookUrl).toBe("https://discord.com/api/webhooks/123/abc");
+    expect(data.discordNotificationsEnabled).toBe(true);
   });
 });
 
@@ -156,5 +167,50 @@ describe("PATCH /api/preferences", () => {
     const data = await res.json();
     expect(res.status).toBe(400);
     expect(data.error).toBe("Invalid JSON");
+  });
+
+  it("rejects invalid Discord webhook URL", async () => {
+    mockAuth.mockResolvedValue({ user: { id: "user-1" } });
+    const res = await PATCH(
+      makePatchRequest({ discordWebhookUrl: "https://example.com/webhook" })
+    );
+    const data = await res.json();
+    expect(res.status).toBe(400);
+    expect(data.error).toContain("Discord webhook URL");
+  });
+
+  it("accepts valid Discord webhook URL", async () => {
+    mockAuth.mockResolvedValue({ user: { id: "user-1" } });
+    mockDbInsertConflict.mockResolvedValue(undefined);
+    const res = await PATCH(
+      makePatchRequest({
+        discordWebhookUrl: "https://discord.com/api/webhooks/123/abc",
+      })
+    );
+    expect(res.status).toBe(200);
+  });
+
+  it("accepts null to clear Discord webhook URL", async () => {
+    mockAuth.mockResolvedValue({ user: { id: "user-1" } });
+    mockDbInsertConflict.mockResolvedValue(undefined);
+    const res = await PATCH(makePatchRequest({ discordWebhookUrl: null }));
+    expect(res.status).toBe(200);
+  });
+
+  it("accepts discordNotificationsEnabled boolean", async () => {
+    mockAuth.mockResolvedValue({ user: { id: "user-1" } });
+    mockDbInsertConflict.mockResolvedValue(undefined);
+    const res = await PATCH(
+      makePatchRequest({ discordNotificationsEnabled: true })
+    );
+    expect(res.status).toBe(200);
+  });
+
+  it("rejects non-boolean discordNotificationsEnabled", async () => {
+    mockAuth.mockResolvedValue({ user: { id: "user-1" } });
+    const res = await PATCH(
+      makePatchRequest({ discordNotificationsEnabled: "yes" })
+    );
+    expect(res.status).toBe(400);
   });
 });

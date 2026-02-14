@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db, scheduledSessions, gameCache } from "@/lib/db";
 import { eq, and, gte, lte } from "drizzle-orm";
+import { notifySessionCreated } from "@/lib/services/discord-notify";
 
 export async function GET(req: NextRequest) {
   const session = await auth();
@@ -98,6 +99,22 @@ export async function POST(req: NextRequest) {
     endTime: end,
     notes: notes ?? null,
   });
+
+  const cacheRows = await db
+    .select({ name: gameCache.name, headerImageUrl: gameCache.headerImageUrl })
+    .from(gameCache)
+    .where(eq(gameCache.steamAppId, steamAppId))
+    .limit(1);
+
+  const game = cacheRows[0];
+  if (game) {
+    notifySessionCreated(session.user.id, {
+      gameName: game.name,
+      headerImageUrl: game.headerImageUrl,
+      startTime: start,
+      endTime: end,
+    }).catch((err) => console.error(`[Discord] Session ${id} notify failed:`, err));
+  }
 
   return NextResponse.json({ id }, { status: 201 });
 }

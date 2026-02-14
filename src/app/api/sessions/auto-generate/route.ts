@@ -4,6 +4,7 @@ import { db, scheduledSessions, userGames, userPreferences, gameCache } from "@/
 import { eq, and, notInArray } from "drizzle-orm";
 import { generateSchedule } from "@/lib/services/scheduler";
 import { redis } from "@/lib/services/cache";
+import { notifyAutoGenerate } from "@/lib/services/discord-notify";
 
 export async function POST(req: NextRequest) {
   const session = await auth();
@@ -126,6 +127,14 @@ export async function POST(req: NextRequest) {
   } catch {
     return NextResponse.json({ error: "Failed to save sessions" }, { status: 500 });
   }
+
+  const gameNames = [...new Set(backlogGames.map((g) => g.gameName))];
+  notifyAutoGenerate(session.user.id, {
+    sessionCount: toInsert.length,
+    games: gameNames,
+    startDate,
+    weeks,
+  }).catch((err) => console.error("[Discord] Auto-generate notify failed:", err));
 
   return NextResponse.json({ created: toInsert.length }, { status: 201 });
 }

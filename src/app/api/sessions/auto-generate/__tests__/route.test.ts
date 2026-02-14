@@ -9,6 +9,7 @@ const mockDbInsertValues = vi.fn();
 const mockGenerateSchedule = vi.fn();
 const mockRedisIncr = vi.fn();
 const mockRedisExpire = vi.fn();
+const mockNotifyAutoGenerate = vi.fn();
 
 vi.mock("@/lib/auth", () => ({
   auth: () => mockAuth(),
@@ -70,12 +71,17 @@ vi.mock("@/lib/services/cache", () => ({
   },
 }));
 
+vi.mock("@/lib/services/discord-notify", () => ({
+  notifyAutoGenerate: (...args: unknown[]) => mockNotifyAutoGenerate(...args),
+}));
+
 import { POST } from "../route";
 
 beforeEach(() => {
   vi.clearAllMocks();
   mockRedisIncr.mockResolvedValue(1);
   mockRedisExpire.mockResolvedValue(true);
+  mockNotifyAutoGenerate.mockResolvedValue(undefined);
   mockPrefsLimit.mockResolvedValue([{
     weeklyHours: 10,
     sessionLengthMinutes: 60,
@@ -224,6 +230,27 @@ describe("POST /api/sessions/auto-generate", () => {
 
     const res = await POST(makeRequest({ startDate: "2025-03-17", weeks: 1 }));
     expect(res.status).toBe(201);
+  });
+
+  it("fires Discord notification after auto-generating sessions", async () => {
+    mockAuth.mockResolvedValue({ user: { id: "user-1" } });
+    mockGenerateSchedule.mockReturnValue([
+      {
+        steamAppId: 440,
+        startTime: new Date("2025-03-17T19:00:00Z"),
+        endTime: new Date("2025-03-17T20:00:00Z"),
+      },
+    ]);
+    mockDbInsertValues.mockResolvedValue(undefined);
+
+    await POST(makeRequest({ startDate: "2025-03-17", weeks: 1 }));
+
+    expect(mockNotifyAutoGenerate).toHaveBeenCalledWith("user-1", {
+      sessionCount: 1,
+      games: ["TF2"],
+      startDate: "2025-03-17",
+      weeks: 1,
+    });
   });
 
   it("sorts backlog games by priority descending", async () => {

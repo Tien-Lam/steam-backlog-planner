@@ -5,6 +5,7 @@ const mockAuth = vi.fn();
 const mockDbUpdateReturning = vi.fn();
 const mockDbDeleteReturning = vi.fn();
 const mockDbSelectLimit = vi.fn();
+const mockNotifySessionCompleted = vi.fn();
 
 vi.mock("@/lib/auth", () => ({
   auth: () => mockAuth(),
@@ -34,7 +35,9 @@ vi.mock("@/lib/db", () => {
     scheduledSessions: {
       id: "id",
       userId: "user_id",
+      steamAppId: "steam_app_id",
     },
+    gameCache: { steamAppId: "steam_app_id", name: "name", headerImageUrl: "header_image_url" },
   };
 });
 
@@ -43,10 +46,15 @@ vi.mock("drizzle-orm", () => ({
   and: vi.fn((...args: unknown[]) => args),
 }));
 
+vi.mock("@/lib/services/discord-notify", () => ({
+  notifySessionCompleted: (...args: unknown[]) => mockNotifySessionCompleted(...args),
+}));
+
 import { PATCH, DELETE } from "../route";
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mockNotifySessionCompleted.mockResolvedValue(undefined);
   mockDbSelectLimit.mockResolvedValue([{
     id: "session-1",
     startTime: new Date("2025-03-15T18:00:00Z"),
@@ -166,18 +174,58 @@ describe("PATCH /api/sessions/[sessionId]", () => {
     mockAuth.mockResolvedValue({ user: { id: "user-1" } });
     const updated = {
       id: "session-1",
+      steamAppId: 440,
       notes: "Updated",
-      completed: true,
+      completed: false,
     };
     mockDbUpdateReturning.mockResolvedValue([updated]);
 
     const res = await PATCH(
-      makePatchRequest({ notes: "Updated", completed: true }),
+      makePatchRequest({ notes: "Updated" }),
       { params: sessionParams }
     );
     const data = await res.json();
     expect(res.status).toBe(200);
     expect(data.notes).toBe("Updated");
+  });
+
+  it("fires Discord notification when session marked completed", async () => {
+    mockAuth.mockResolvedValue({ user: { id: "user-1" } });
+    mockDbUpdateReturning.mockResolvedValue([
+      { id: "session-1", steamAppId: 440, completed: true },
+    ]);
+    mockDbSelectLimit.mockResolvedValue([
+      { name: "TF2", headerImageUrl: "http://img.jpg" },
+    ]);
+
+    await PATCH(makePatchRequest({ completed: true }), { params: sessionParams });
+
+    expect(mockNotifySessionCompleted).toHaveBeenCalledWith("user-1", {
+      gameName: "TF2",
+      headerImageUrl: "http://img.jpg",
+    });
+  });
+
+  it("does not fire Discord notification when completed is false", async () => {
+    mockAuth.mockResolvedValue({ user: { id: "user-1" } });
+    mockDbUpdateReturning.mockResolvedValue([
+      { id: "session-1", steamAppId: 440, completed: false },
+    ]);
+
+    await PATCH(makePatchRequest({ completed: false }), { params: sessionParams });
+
+    expect(mockNotifySessionCompleted).not.toHaveBeenCalled();
+  });
+
+  it("does not fire Discord notification for non-completion updates", async () => {
+    mockAuth.mockResolvedValue({ user: { id: "user-1" } });
+    mockDbUpdateReturning.mockResolvedValue([
+      { id: "session-1", steamAppId: 440, notes: "hi" },
+    ]);
+
+    await PATCH(makePatchRequest({ notes: "hi" }), { params: sessionParams });
+
+    expect(mockNotifySessionCompleted).not.toHaveBeenCalled();
   });
 });
 
