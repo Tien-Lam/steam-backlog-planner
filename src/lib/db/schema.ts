@@ -33,6 +33,10 @@ export const userPreferences = pgTable("user_preferences", {
   weeklyHours: integer("weekly_hours").default(10),
   sessionLengthMinutes: integer("session_length_minutes").default(60),
   timezone: text("timezone").default("UTC"),
+  discordWebhookUrl: text("discord_webhook_url"),
+  discordNotificationsEnabled: boolean("discord_notifications_enabled")
+    .default(false)
+    .notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
