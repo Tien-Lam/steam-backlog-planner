@@ -6,6 +6,8 @@ export interface Preferences {
   weeklyHours: number;
   sessionLengthMinutes: number;
   timezone: string;
+  discordWebhookUrl: string | null;
+  discordNotificationsEnabled: boolean;
 }
 
 export function usePreferences() {

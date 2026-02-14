@@ -24,7 +24,13 @@ beforeEach(() => {
 
 describe("usePreferences", () => {
   it("fetches preferences successfully", async () => {
-    const prefs = { weeklyHours: 10, sessionLengthMinutes: 60, timezone: "UTC" };
+    const prefs = {
+      weeklyHours: 10,
+      sessionLengthMinutes: 60,
+      timezone: "UTC",
+      discordWebhookUrl: null,
+      discordNotificationsEnabled: false,
+    };
     mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve(prefs) });
 
     const { result } = renderHook(() => usePreferences(), { wrapper: createWrapper() });

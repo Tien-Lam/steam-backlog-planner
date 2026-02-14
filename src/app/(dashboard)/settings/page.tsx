@@ -12,8 +12,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
 import { usePreferences, useUpdatePreferences } from "@/lib/hooks/use-preferences";
+import { useTestDiscordWebhook } from "@/lib/hooks/use-discord";
 
 const TIMEZONES = [
   "UTC",
@@ -36,20 +38,27 @@ const TIMEZONES = [
 export default function SettingsPage() {
   const { data: prefs, isLoading } = usePreferences();
   const updatePrefs = useUpdatePreferences();
+  const testWebhook = useTestDiscordWebhook();
 
   const [weeklyHours, setWeeklyHours] = useState<number | null>(null);
   const [sessionLength, setSessionLength] = useState<number | null>(null);
   const [timezone, setTimezone] = useState<string | null>(null);
+  const [discordWebhookUrl, setDiscordWebhookUrl] = useState<string | null>(null);
+  const [discordEnabled, setDiscordEnabled] = useState<boolean | null>(null);
 
   const displayWeeklyHours = weeklyHours ?? prefs?.weeklyHours ?? 10;
   const displaySessionLength = sessionLength ?? prefs?.sessionLengthMinutes ?? 60;
   const displayTimezone = timezone ?? prefs?.timezone ?? "UTC";
+  const displayWebhookUrl = discordWebhookUrl ?? prefs?.discordWebhookUrl ?? "";
+  const displayDiscordEnabled = discordEnabled ?? prefs?.discordNotificationsEnabled ?? false;
 
   function handleSave() {
     updatePrefs.mutate({
       weeklyHours: displayWeeklyHours,
       sessionLengthMinutes: displaySessionLength,
       timezone: displayTimezone,
+      discordWebhookUrl: displayWebhookUrl || null,
+      discordNotificationsEnabled: displayDiscordEnabled,
     });
   }
 
@@ -125,6 +134,57 @@ export default function SettingsPage() {
           )}
           {updatePrefs.isError && (
             <p className="text-sm text-destructive">Failed to save settings.</p>
+          )}
+        </div>
+      </Card>
+
+      <Card className="p-6 max-w-lg space-y-6">
+        <div>
+          <h2 className="text-lg font-semibold">Discord Notifications</h2>
+          <p className="text-sm text-muted-foreground">
+            Get notified in Discord when sessions are scheduled or completed
+          </p>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="discordWebhookUrl">Webhook URL</Label>
+          <Input
+            id="discordWebhookUrl"
+            type="url"
+            placeholder="https://discord.com/api/webhooks/..."
+            value={displayWebhookUrl}
+            onChange={(e) => setDiscordWebhookUrl(e.target.value)}
+          />
+          <p className="text-xs text-muted-foreground">
+            Create a webhook in your Discord channel settings and paste the URL here
+          </p>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <Switch
+            id="discordEnabled"
+            checked={displayDiscordEnabled}
+            onCheckedChange={setDiscordEnabled}
+            disabled={!displayWebhookUrl}
+          />
+          <Label htmlFor="discordEnabled">Enable notifications</Label>
+        </div>
+
+        <div className="flex items-center gap-4">
+          <Button
+            variant="outline"
+            onClick={() => testWebhook.mutate()}
+            disabled={!displayWebhookUrl || testWebhook.isPending}
+          >
+            {testWebhook.isPending ? "Sending..." : "Test Webhook"}
+          </Button>
+          {testWebhook.isSuccess && (
+            <p className="text-sm text-green-400">Test notification sent!</p>
+          )}
+          {testWebhook.isError && (
+            <p className="text-sm text-destructive">
+              {testWebhook.error?.message || "Failed to send test notification"}
+            </p>
           )}
         </div>
       </Card>
