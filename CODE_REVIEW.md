@@ -4,7 +4,19 @@ Tracked issues from end-of-session code reviews. Fix before building on top of a
 
 ## Open
 
-(No open issues)
+### CR-023: Discord test endpoint lacks rate limiting [MEDIUM]
+- **File**: `src/app/api/discord/test/route.ts`
+- **Found**: Phase 6 Discord implementation review
+- **Fix by**: Phase 6 continued (non-critical — requires auth)
+- **Issue**: POST /api/discord/test has no rate limiting. An authenticated user could spam test notifications to a Discord channel.
+- **Recommendation**: Add per-user Redis rate limit (e.g., 3 tests/hour), similar to auto-generate rate limiting.
+
+### CR-024: Stored webhook URLs not re-validated in fire-and-forget notifications [LOW]
+- **File**: `src/lib/services/discord-notify.ts`
+- **Found**: Phase 6 Discord implementation review
+- **Fix by**: Phase 6 continued (defense-in-depth, low risk)
+- **Issue**: Notification functions read webhook URL from DB and use it directly without re-validating. If validation rules are tightened, old URLs won't be caught. The test endpoint does re-validate.
+- **Recommendation**: Add `isValidDiscordWebhookUrl()` check in `getDiscordConfig()` for consistency.
 
 ## Resolved
 

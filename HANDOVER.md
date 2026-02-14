@@ -1,7 +1,7 @@
 # Steam Backlog Planner - Implementation Handover
 
 ## Session Summary
-Phase 5 polish: adaptive mobile/desktop navigation, rich dashboard page, and consistent loading/error/empty states. Added E2E tests for dashboard and responsive nav, plus fixed a bug where `src/app/page.tsx` (default Next.js template) was shadowing the dashboard at `/`. All 315 unit tests pass, 35 E2E tests pass, coverage 92.7%/86.9%/88.9%/93.8%.
+Phase 6 (partial): Discord webhook notifications. Users can configure a Discord webhook URL in settings and receive notifications when sessions are scheduled, auto-generated, or completed. Includes SSRF-hardened URL validation, 5s fetch timeout, content truncation for Discord limits, and auto-disable when webhook URL is cleared. All 352 unit tests pass (44 files), coverage 93.25%/87.18%/89.77%/94.36%.
 
 ## URGENT: Rotate All Credentials
 All `.env.local` secrets were exposed in a conversation. Rotate these BEFORE deploying anywhere:
@@ -11,9 +11,58 @@ All `.env.local` secrets were exposed in a conversation. Rotate these BEFORE dep
 - [ ] Steam API key (https://steamcommunity.com/dev/apikey)
 
 ## Next Session TODO
-1. Continue Phase 5 polish — verify responsive design at various breakpoints manually
-2. Consider adding HLTB endpoint discovery (scrape JS bundles for search URL) as a fallback if `/api/finder` moves again
-3. Phase 6 external integrations (Google Calendar, Discord, IGDB)
+1. Run `npm run db:push` to apply Discord schema changes to Neon
+2. Phase 6 continued: Google Calendar OAuth two-way sync
+3. Phase 6 continued: IGDB integration for additional metadata
+4. Consider adding HLTB endpoint discovery (scrape JS bundles for search URL) as a fallback
+5. Consider rate limiting on POST /api/discord/test (currently unprotected)
+
+## Completed — Phase 6 (Partial): Discord Webhook Notifications
+
+### Architecture
+```
+Settings Page → Preferences API → userPreferences (DB)
+                                      ↑ read config
+Session APIs → discord-notify.ts → discord.ts → Discord Webhook
+               (DB lookup + gate)   (embed + HTTP)
+```
+
+### New Files
+| File | Purpose |
+|------|---------|
+| `src/lib/services/discord.ts` | URL validation, embed builders, webhook POST with 5s timeout |
+| `src/lib/services/discord-notify.ts` | Orchestrator: reads user prefs, gates on enabled + URL, delegates to discord.ts |
+| `src/app/api/discord/test/route.ts` | POST endpoint: sends test embed, returns success/502 |
+| `src/lib/hooks/use-discord.ts` | `useTestDiscordWebhook()` mutation hook |
+| `src/components/ui/switch.tsx` | shadcn Switch component |
+
+### Modified Files
+| File | Change |
+|------|--------|
+| `src/lib/db/schema.ts` | Added `discordWebhookUrl` (text, nullable) and `discordNotificationsEnabled` (boolean, default false) |
+| `src/app/api/preferences/route.ts` | Discord fields in GET/PATCH, auto-disable on URL clear |
+| `src/app/api/sessions/route.ts` | Fire-and-forget notification on session create |
+| `src/app/api/sessions/auto-generate/route.ts` | Fire-and-forget notification on auto-generate |
+| `src/app/api/sessions/[sessionId]/route.ts` | Fire-and-forget notification on session completion |
+| `src/lib/hooks/use-preferences.ts` | Added Discord fields to Preferences interface |
+| `src/app/(dashboard)/settings/page.tsx` | Discord Notifications card with URL input, enable switch, test button |
+
+### Security Hardening
+- **SSRF defense**: URL validated with strict regex (`/\d+/[A-Za-z0-9_-]+$`) AND `new URL()` hostname check
+- **Fetch timeout**: 5s `AbortSignal.timeout` prevents hanging requests
+- **Content truncation**: Embed descriptions capped at 256 chars, field values at 1024 chars
+- **Auto-disable**: Clearing webhook URL automatically sets `discordNotificationsEnabled = false`
+- **Fire-and-forget safety**: All notification calls wrapped in `.catch()` with contextual logging — can never block session operations
+
+### Code Review Findings
+- **CR-023 (MEDIUM, deferred)**: Test endpoint lacks rate limiting — could be abused to spam a Discord channel. Add per-user Redis rate limit (e.g., 3 tests/hour). Low priority since it requires auth.
+- **CR-024 (LOW, deferred)**: Stored webhook URLs not re-validated before use in fire-and-forget notifications (only validated on insert and in test endpoint). Defense-in-depth improvement.
+
+### Test Results
+| Suite | Files | Tests | Status |
+|-------|-------|-------|--------|
+| Unit tests | 44 | 352 | All pass |
+| Coverage | — | — | 93.25% stmts, 87.18% branches, 89.77% funcs, 94.36% lines |
 
 ## Completed — Phase 5 Polish (Navigation + Dashboard + Error States)
 
@@ -57,11 +106,11 @@ All `.env.local` secrets were exposed in a conversation. Rotate these BEFORE dep
 | E2E tests | 6 | 35 | ✅ All pass |
 | Coverage | — | — | ✅ 92.7% stmts, 86.9% branches, 88.9% funcs, 93.8% lines |
 
-## Future — Phase 6: External Integrations
+## Future — Phase 6: External Integrations (Remaining)
 
 ### Features
 - [ ] Google Calendar OAuth and two-way sync
-- [ ] Discord webhook notifications
+- [x] Discord webhook notifications
 - [ ] IGDB integration for additional metadata
 
 ## Completed — HLTB Package Replacement
@@ -395,10 +444,11 @@ steam-backlog-planner/
 │   │       ├── sessions/auto-generate/route.ts
 │   │       ├── calendar/export.ics/route.ts
 │   │       ├── statistics/route.ts
-│   │       └── preferences/route.ts
+│   │       ├── preferences/route.ts
+│   │       └── discord/test/route.ts
 │   ├── components/
 │   │   ├── nav.tsx
-│   │   ├── ui/                              (16 shadcn components)
+│   │   ├── ui/                              (17 shadcn components)
 │   │   ├── games/
 │   │   │   ├── game-card.tsx
 │   │   │   ├── game-grid.tsx
@@ -416,8 +466,8 @@ steam-backlog-planner/
 │   └── lib/
 │       ├── auth/{index,steam-provider,types}.ts
 │       ├── db/{index,schema}.ts
-│       ├── services/{steam,cache,hltb,hltb-client,ical,scheduler}.ts
-│       ├── hooks/{use-library,use-game-detail,use-preferences,use-priority,use-sessions,use-statistics}.ts
+│       ├── services/{steam,cache,hltb,hltb-client,ical,scheduler,discord,discord-notify}.ts
+│       ├── hooks/{use-library,use-game-detail,use-preferences,use-priority,use-sessions,use-statistics,use-discord}.ts
 │       ├── utils/date.ts
 │       └── providers.tsx
 ```
