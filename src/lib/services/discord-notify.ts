@@ -1,6 +1,7 @@
 import { db, userPreferences } from "@/lib/db";
 import { eq } from "drizzle-orm";
 import {
+  isValidDiscordWebhookUrl,
   sendSessionCreatedEmbed,
   sendAutoGenerateEmbed,
   sendSessionCompletedEmbed,
@@ -19,6 +20,7 @@ async function getDiscordConfig(userId: string) {
   if (!rows.length) return null;
   const { webhookUrl, enabled } = rows[0];
   if (!enabled || !webhookUrl) return null;
+  if (!isValidDiscordWebhookUrl(webhookUrl)) return null;
   return webhookUrl;
 }
 

@@ -3,6 +3,8 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const mockAuth = vi.fn();
 const mockDbSelectLimit = vi.fn();
 const mockSendTestEmbed = vi.fn();
+const mockRedisIncr = vi.fn();
+const mockRedisExpire = vi.fn();
 
 vi.mock("@/lib/auth", () => ({
   auth: () => mockAuth(),
@@ -32,10 +34,19 @@ vi.mock("@/lib/services/discord", () => ({
   sendTestEmbed: (...args: unknown[]) => mockSendTestEmbed(...args),
 }));
 
+vi.mock("@/lib/services/cache", () => ({
+  redis: {
+    incr: (...args: unknown[]) => mockRedisIncr(...args),
+    expire: (...args: unknown[]) => mockRedisExpire(...args),
+  },
+}));
+
 import { POST } from "../route";
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mockRedisIncr.mockResolvedValue(1);
+  mockRedisExpire.mockResolvedValue(1);
 });
 
 describe("POST /api/discord/test", () => {
@@ -84,5 +95,39 @@ describe("POST /api/discord/test", () => {
 
     const res = await POST();
     expect(res.status).toBe(502);
+  });
+
+  it("returns 429 when rate limit exceeded", async () => {
+    mockAuth.mockResolvedValue({ user: { id: "user-1" } });
+    mockRedisIncr.mockResolvedValue(4);
+
+    const res = await POST();
+    expect(res.status).toBe(429);
+    expect(mockDbSelectLimit).not.toHaveBeenCalled();
+  });
+
+  it("allows request when Redis fails (fail-open)", async () => {
+    mockAuth.mockResolvedValue({ user: { id: "user-1" } });
+    mockRedisIncr.mockRejectedValue(new Error("Redis down"));
+    mockDbSelectLimit.mockResolvedValue([
+      { webhookUrl: "https://discord.com/api/webhooks/123/abc" },
+    ]);
+    mockSendTestEmbed.mockResolvedValue(undefined);
+
+    const res = await POST();
+    expect(res.status).toBe(200);
+  });
+
+  it("sets rate limit key with 1-hour TTL", async () => {
+    mockAuth.mockResolvedValue({ user: { id: "user-1" } });
+    mockRedisIncr.mockResolvedValue(1);
+    mockDbSelectLimit.mockResolvedValue([
+      { webhookUrl: "https://discord.com/api/webhooks/123/abc" },
+    ]);
+    mockSendTestEmbed.mockResolvedValue(undefined);
+
+    await POST();
+    expect(mockRedisIncr).toHaveBeenCalledWith("sbp:ratelimit:discord-test:user-1");
+    expect(mockRedisExpire).toHaveBeenCalledWith("sbp:ratelimit:discord-test:user-1", 3600);
   });
 });

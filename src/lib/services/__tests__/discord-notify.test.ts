@@ -24,6 +24,8 @@ vi.mock("drizzle-orm", () => ({
 }));
 
 vi.mock("../discord", () => ({
+  isValidDiscordWebhookUrl: (url: string) =>
+    /^https:\/\/(discord\.com|discordapp\.com)\/api\/webhooks\/\d+\/[A-Za-z0-9_-]+$/.test(url),
   sendSessionCreatedEmbed: (...args: unknown[]) => mockSendSessionCreated(...args),
   sendAutoGenerateEmbed: (...args: unknown[]) => mockSendAutoGenerate(...args),
   sendSessionCompletedEmbed: (...args: unknown[]) => mockSendSessionCompleted(...args),
@@ -77,6 +79,14 @@ describe("notifySessionCreated", () => {
 
   it("skips when no preferences row exists", async () => {
     mockDbSelectLimit.mockResolvedValue([]);
+    await notifySessionCreated("user-1", data);
+    expect(mockSendSessionCreated).not.toHaveBeenCalled();
+  });
+
+  it("skips when stored URL fails validation", async () => {
+    mockDbSelectLimit.mockResolvedValue([
+      { webhookUrl: "https://evil.com/api/webhooks/123/abc", enabled: true },
+    ]);
     await notifySessionCreated("user-1", data);
     expect(mockSendSessionCreated).not.toHaveBeenCalled();
   });
