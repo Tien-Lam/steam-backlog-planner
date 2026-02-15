@@ -1,7 +1,7 @@
 # Steam Backlog Planner - Implementation Handover
 
 ## Session Summary
-Phase 6 (partial): Discord webhook notifications. Users can configure a Discord webhook URL in settings and receive notifications when sessions are scheduled, auto-generated, or completed. Includes SSRF-hardened URL validation, 5s fetch timeout, content truncation for Discord limits, and auto-disable when webhook URL is cleared. All 352 unit tests pass (44 files), coverage 93.25%/87.18%/89.77%/94.36%.
+Phase 6 (continued): Google Calendar push-only integration. Users can connect their Google account from Settings, and SBP automatically pushes session events to a dedicated "Steam Backlog Planner" calendar. Includes OAuth connect/callback/disconnect routes, sync orchestrator with auto-token-refresh, fire-and-forget sync from session CRUD routes, and settings UI with connect/disconnect/toggle. Also fixed CR-023 (Discord test rate limiting) and CR-024 (stored URL re-validation). All 426 unit tests pass (50 files), coverage 93.82%/88.85%/87.86%/94.65%.
 
 ## URGENT: Rotate All Credentials
 All `.env.local` secrets were exposed in a conversation. Rotate these BEFORE deploying anywhere:
@@ -11,11 +11,75 @@ All `.env.local` secrets were exposed in a conversation. Rotate these BEFORE dep
 - [ ] Steam API key (https://steamcommunity.com/dev/apikey)
 
 ## Next Session TODO
-1. Run `npm run db:push` to apply Discord schema changes to Neon
-2. Phase 6 continued: Google Calendar OAuth two-way sync
-3. Phase 6 continued: IGDB integration for additional metadata
-4. Consider adding HLTB endpoint discovery (scrape JS bundles for search URL) as a fallback
-5. Consider rate limiting on POST /api/discord/test (currently unprotected)
+1. Run `npm run db:push` to apply Discord + Google Calendar schema changes to Neon
+2. Phase 6 continued: IGDB integration for additional metadata
+3. Consider adding HLTB endpoint discovery (scrape JS bundles for search URL) as a fallback
+4. Address deferred code review items: CR-028 (token refresh race), CR-029 (OAuth rate limiting), CR-033 (transient vs permanent refresh failure)
+
+## Completed — Phase 6 (Continued): Google Calendar Push-Only Integration
+
+### Architecture
+```
+Settings Page → /api/google/connect → Google OAuth → /api/google/callback → DB
+                                                         ↑ stores tokens + calendarId
+Session APIs → gcal-sync.ts → google-calendar.ts → Google Calendar API
+               (DB lookup + gate + token refresh)   (raw fetch, no SDK)
+```
+
+### New Files
+| File | Purpose |
+|------|---------|
+| `src/lib/services/google-calendar.ts` | Raw Google Calendar API client (exchangeCodeForTokens, refreshAccessToken, getUserEmail, createCalendar, event CRUD, revokeToken) |
+| `src/lib/services/gcal-sync.ts` | Sync orchestrator: reads config from DB, auto-refreshes tokens, gates on enabled, delegates to API client |
+| `src/app/api/google/connect/route.ts` | GET → redirect to Google OAuth consent screen with CSRF state token |
+| `src/app/api/google/callback/route.ts` | GET → exchange code, create calendar, store tokens, redirect to settings |
+| `src/app/api/google/disconnect/route.ts` | POST → revoke tokens, clear DB fields, clear event IDs |
+| `src/lib/hooks/use-google-calendar.ts` | `useDisconnectGoogleCalendar()` mutation hook |
+
+### Modified Files
+| File | Change |
+|------|--------|
+| `src/lib/db/schema.ts` | +6 columns on userPreferences, +1 on scheduledSessions |
+| `src/app/api/sessions/route.ts` | Fire-and-forget `syncSessionCreated()` |
+| `src/app/api/sessions/[sessionId]/route.ts` | Fire-and-forget `syncSessionUpdated()` + `syncSessionDeleted()` |
+| `src/app/api/sessions/auto-generate/route.ts` | Fire-and-forget `syncAutoGenerate()` |
+| `src/app/api/preferences/route.ts` | Return Google fields in GET; validate `googleCalendarSyncEnabled` in PATCH |
+| `src/lib/hooks/use-preferences.ts` | Added Google fields to Preferences interface |
+| `src/app/(dashboard)/settings/page.tsx` | Google Calendar card (connect/disconnect/toggle) |
+
+### Security Hardening
+- **CSRF protection**: Random state token stored in Redis (10min TTL), validated in callback, deleted immediately after validation (CR-025)
+- **Env var validation**: Explicit null checks on GOOGLE_CLIENT_ID/SECRET/REDIRECT_URI in callback (CR-026)
+- **Token revocation**: Best-effort revoke on disconnect, fail gracefully if already revoked
+- **Event ID cleanup**: Clear orphaned event IDs on disconnect to prevent duplicates on reconnect (CR-034)
+- **Auto-disable**: Sync automatically disabled when refresh token is permanently invalid
+- **Fire-and-forget safety**: All sync calls wrapped in `.catch()` — never block session operations
+
+### Also Fixed This Session
+- **CR-023 (MEDIUM)**: Added per-user Redis rate limit (3/hour) to Discord test endpoint
+- **CR-024 (LOW)**: Added `isValidDiscordWebhookUrl()` re-validation in `getDiscordConfig()`
+
+### Code Review Findings
+- **CR-025 HIGH** (fixed): OAuth state deleted too late — moved to immediately after validation
+- **CR-026 HIGH** (fixed): Env vars used with `!` assertion — added explicit null checks
+- **CR-027 HIGH** (accepted risk): Tokens stored in plain text — same pattern as Discord, DB behind TLS + auth
+- **CR-028 MEDIUM** (deferred): Token refresh race condition — acceptable for fire-and-forget
+- **CR-029 MEDIUM** (deferred): No rate limiting on OAuth endpoints
+- **CR-033 MEDIUM** (deferred): Sync permanently disabled on any refresh failure
+- **CR-034 MEDIUM** (fixed): Event IDs not cleared on disconnect
+
+### Environment Variables (3 new)
+```
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
+GOOGLE_REDIRECT_URI=http://localhost:3000/api/google/callback
+```
+
+### Test Results
+| Suite | Files | Tests | Status |
+|-------|-------|-------|--------|
+| Unit tests | 50 | 426 | All pass |
+| Coverage | — | — | 93.82% stmts, 88.85% branches, 87.86% funcs, 94.65% lines |
 
 ## Completed — Phase 6 (Partial): Discord Webhook Notifications
 
@@ -109,7 +173,7 @@ Session APIs → discord-notify.ts → discord.ts → Discord Webhook
 ## Future — Phase 6: External Integrations (Remaining)
 
 ### Features
-- [ ] Google Calendar OAuth and two-way sync
+- [x] Google Calendar push-only integration
 - [x] Discord webhook notifications
 - [ ] IGDB integration for additional metadata
 
@@ -445,7 +509,8 @@ steam-backlog-planner/
 │   │       ├── calendar/export.ics/route.ts
 │   │       ├── statistics/route.ts
 │   │       ├── preferences/route.ts
-│   │       └── discord/test/route.ts
+│   │       ├── discord/test/route.ts
+│   │       └── google/{connect,callback,disconnect}/route.ts
 │   ├── components/
 │   │   ├── nav.tsx
 │   │   ├── ui/                              (17 shadcn components)
@@ -466,8 +531,8 @@ steam-backlog-planner/
 │   └── lib/
 │       ├── auth/{index,steam-provider,types}.ts
 │       ├── db/{index,schema}.ts
-│       ├── services/{steam,cache,hltb,hltb-client,ical,scheduler,discord,discord-notify}.ts
-│       ├── hooks/{use-library,use-game-detail,use-preferences,use-priority,use-sessions,use-statistics,use-discord}.ts
+│       ├── services/{steam,cache,hltb,hltb-client,ical,scheduler,discord,discord-notify,google-calendar,gcal-sync}.ts
+│       ├── hooks/{use-library,use-game-detail,use-preferences,use-priority,use-sessions,use-statistics,use-discord,use-google-calendar}.ts
 │       ├── utils/date.ts
 │       └── providers.tsx
 ```
@@ -481,6 +546,9 @@ Copy `.env.example` to `.env.local` and fill in:
 - `UPSTASH_REDIS_REST_TOKEN` - From Upstash console
 - `AUTH_SECRET` - Generate with `openssl rand -base64 32`
 - `NEXTAUTH_URL` - `http://localhost:3000` for dev
+- `GOOGLE_CLIENT_ID` - Google OAuth client ID (Cloud Console)
+- `GOOGLE_CLIENT_SECRET` - Google OAuth client secret
+- `GOOGLE_REDIRECT_URI` - `http://localhost:3000/api/google/callback` for dev
 
 ## To Run
 

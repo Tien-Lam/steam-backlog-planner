@@ -4,21 +4,71 @@ Tracked issues from end-of-session code reviews. Fix before building on top of a
 
 ## Open
 
+
+### CR-027: Token storage without encryption [HIGH — accepted risk]
+- **File**: `src/lib/db/schema.ts` (googleAccessToken, googleRefreshToken)
+- **Found**: Phase 6 Google Calendar review
+- **Fix by**: Future hardening (accepted risk — same pattern as Discord webhook URL)
+- **Issue**: Google OAuth tokens stored in plain text in DB. If DB is compromised, attacker gains calendar access.
+- **Decision**: Accepted risk. DB is behind Neon TLS + auth. Minimal scopes (calendar + email only). Same pattern as Discord webhook URL. Encryption can be added later with `crypto.subtle` if threat model changes.
+
+### CR-028: Race condition in token refresh logic [MEDIUM]
+- **File**: `src/lib/services/gcal-sync.ts` (getGoogleCalendarConfig)
+- **Found**: Phase 6 Google Calendar review
+- **Fix by**: Future hardening (acceptable for fire-and-forget pattern)
+- **Issue**: Two concurrent sync operations for the same user could both detect expired tokens and call `refreshAccessToken()` concurrently, causing duplicate refresh requests and stale token writes.
+- **Recommendation**: Add Redis distributed lock (`sbp:gcal-token-refresh:{userId}`) around token refresh.
+
+### CR-029: Missing rate limiting on OAuth endpoints [MEDIUM]
+- **File**: `src/app/api/google/connect/route.ts`, `src/app/api/google/callback/route.ts`
+- **Found**: Phase 6 Google Calendar review
+- **Fix by**: Future hardening
+- **Issue**: OAuth connect and callback endpoints have no rate limiting. Could be abused to exhaust Redis with state tokens.
+- **Recommendation**: Add Redis-based rate limit (5 requests/5min per user), similar to auto-generate.
+
+### CR-033: Token refresh disables sync on any failure [MEDIUM]
+- **File**: `src/lib/services/gcal-sync.ts` (getGoogleCalendarConfig)
+- **Found**: Phase 6 Google Calendar review
+- **Fix by**: Future hardening
+- **Issue**: If `refreshAccessToken()` fails for any reason (including transient network errors), sync is permanently disabled. Should distinguish between recoverable and unrecoverable failures.
+- **Recommendation**: Track consecutive failures in Redis, only disable after threshold (e.g., 3 failures).
+
+## Resolved
+
 ### CR-023: Discord test endpoint lacks rate limiting [MEDIUM]
 - **File**: `src/app/api/discord/test/route.ts`
 - **Found**: Phase 6 Discord implementation review
-- **Fix by**: Phase 6 continued (non-critical — requires auth)
-- **Issue**: POST /api/discord/test has no rate limiting. An authenticated user could spam test notifications to a Discord channel.
-- **Recommendation**: Add per-user Redis rate limit (e.g., 3 tests/hour), similar to auto-generate rate limiting.
+- **Resolved**: Phase 6 Google Calendar session (commit 03d7eb3)
+- **Issue**: POST /api/discord/test had no rate limiting. Authenticated user could spam Discord.
+- **Fix**: Added per-user Redis rate limit (3 tests/hour) with fail-open on Redis errors.
 
 ### CR-024: Stored webhook URLs not re-validated in fire-and-forget notifications [LOW]
 - **File**: `src/lib/services/discord-notify.ts`
 - **Found**: Phase 6 Discord implementation review
-- **Fix by**: Phase 6 continued (defense-in-depth, low risk)
-- **Issue**: Notification functions read webhook URL from DB and use it directly without re-validating. If validation rules are tightened, old URLs won't be caught. The test endpoint does re-validate.
-- **Recommendation**: Add `isValidDiscordWebhookUrl()` check in `getDiscordConfig()` for consistency.
+- **Resolved**: Phase 6 Google Calendar session (commit 03d7eb3)
+- **Issue**: Notification functions used webhook URL from DB without re-validating format.
+- **Fix**: Added `isValidDiscordWebhookUrl()` check in `getDiscordConfig()`.
 
-## Resolved
+### CR-025: OAuth state CSRF vulnerability — token reuse window [HIGH]
+- **File**: `src/app/api/google/callback/route.ts`
+- **Found**: Phase 6 Google Calendar review
+- **Resolved**: Phase 6 Google Calendar session
+- **Issue**: OAuth state token was deleted AFTER DB writes, allowing potential CSRF reuse during the window between validation and deletion.
+- **Fix**: Moved `redis.del(stateKey)` to immediately after state validation, before any API calls or DB writes.
+
+### CR-026: Missing environment variable validation in callback [HIGH]
+- **File**: `src/app/api/google/callback/route.ts`
+- **Found**: Phase 6 Google Calendar review
+- **Resolved**: Phase 6 Google Calendar session
+- **Issue**: Environment variables accessed with non-null assertion (`!`) without prior validation. Missing vars would cause runtime crash.
+- **Fix**: Added explicit null checks for `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI` with redirect to `?googleError=config_missing`.
+
+### CR-034: Disconnect doesn't clean up calendar event IDs [MEDIUM]
+- **File**: `src/app/api/google/disconnect/route.ts`
+- **Found**: Phase 6 Google Calendar review
+- **Resolved**: Phase 6 Google Calendar session
+- **Issue**: Disconnecting Google Calendar didn't clear `googleCalendarEventId` from `scheduledSessions`, causing duplicate events on reconnect.
+- **Fix**: Added `db.update(scheduledSessions).set({ googleCalendarEventId: null }).where(...)` in disconnect route.
 
 ### CR-021: Library sync resets cachedAt, defeating HLTB staleness check [MEDIUM]
 - **Files**: `src/app/api/steam/library/route.ts` (line 44), `src/app/api/hltb/[appId]/route.ts` (line 35)
