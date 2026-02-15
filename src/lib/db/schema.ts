@@ -37,6 +37,14 @@ export const userPreferences = pgTable("user_preferences", {
   discordNotificationsEnabled: boolean("discord_notifications_enabled")
     .default(false)
     .notNull(),
+  googleAccessToken: text("google_access_token"),
+  googleRefreshToken: text("google_refresh_token"),
+  googleTokenExpiry: timestamp("google_token_expiry"),
+  googleEmail: text("google_email"),
+  googleCalendarId: text("google_calendar_id"),
+  googleCalendarSyncEnabled: boolean("google_calendar_sync_enabled")
+    .default(false)
+    .notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
@@ -92,6 +100,7 @@ export const scheduledSessions = pgTable("scheduled_sessions", {
   endTime: timestamp("end_time").notNull(),
   completed: boolean("completed").default(false).notNull(),
   notes: text("notes"),
+  googleCalendarEventId: text("google_calendar_event_id"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
