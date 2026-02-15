@@ -69,6 +69,14 @@ const DDL = `
     weekly_hours INTEGER DEFAULT 10,
     session_length_minutes INTEGER DEFAULT 60,
     timezone TEXT DEFAULT 'UTC',
+    discord_webhook_url TEXT,
+    discord_notifications_enabled BOOLEAN NOT NULL DEFAULT FALSE,
+    google_access_token TEXT,
+    google_refresh_token TEXT,
+    google_token_expiry TIMESTAMP,
+    google_email TEXT,
+    google_calendar_id TEXT,
+    google_calendar_sync_enabled BOOLEAN NOT NULL DEFAULT FALSE,
     updated_at TIMESTAMP NOT NULL DEFAULT NOW()
   );
 
@@ -112,6 +120,7 @@ const DDL = `
     end_time TIMESTAMP NOT NULL,
     completed BOOLEAN NOT NULL DEFAULT FALSE,
     notes TEXT,
+    google_calendar_event_id TEXT,
     created_at TIMESTAMP NOT NULL DEFAULT NOW()
   );
 `;

@@ -139,6 +139,23 @@ const routes = [
     handler: () =>
       import("@/app/api/discord/test/route").then((m) => m.POST()),
   },
+  {
+    name: "GET /api/google/connect",
+    handler: () =>
+      import("@/app/api/google/connect/route").then((m) => m.GET()),
+  },
+  {
+    name: "GET /api/google/callback",
+    handler: () =>
+      import("@/app/api/google/callback/route").then((m) =>
+        m.GET(makeRequest("/api/google/callback?code=c&state=s"))
+      ),
+  },
+  {
+    name: "POST /api/google/disconnect",
+    handler: () =>
+      import("@/app/api/google/disconnect/route").then((m) => m.POST()),
+  },
 ];
 
 function findRouteFiles(dir: string): string[] {
@@ -175,7 +192,7 @@ async function getExportedMethods(
 
 function isExcluded(filePath: string): boolean {
   const normalized = filePath.replace(/\\/g, "/");
-  return normalized.includes("/auth/") || normalized.includes("/test/");
+  return normalized.includes("/auth/") || normalized.includes("/api/test/");
 }
 
 describe("Error Boundaries", () => {
