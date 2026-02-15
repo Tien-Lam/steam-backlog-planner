@@ -73,6 +73,9 @@ describe("GET /api/preferences", () => {
       timezone: "UTC",
       discordWebhookUrl: null,
       discordNotificationsEnabled: false,
+      googleEmail: null,
+      googleCalendarConnected: false,
+      googleCalendarSyncEnabled: false,
     });
   });
 
@@ -85,6 +88,10 @@ describe("GET /api/preferences", () => {
       timezone: "America/New_York",
       discordWebhookUrl: "https://discord.com/api/webhooks/123/abc",
       discordNotificationsEnabled: true,
+      googleEmail: "user@gmail.com",
+      googleCalendarId: "cal-123",
+      googleRefreshToken: "rt-1",
+      googleCalendarSyncEnabled: true,
     }]);
 
     const res = await GET();
@@ -94,6 +101,29 @@ describe("GET /api/preferences", () => {
     expect(data.timezone).toBe("America/New_York");
     expect(data.discordWebhookUrl).toBe("https://discord.com/api/webhooks/123/abc");
     expect(data.discordNotificationsEnabled).toBe(true);
+    expect(data.googleEmail).toBe("user@gmail.com");
+    expect(data.googleCalendarConnected).toBe(true);
+    expect(data.googleCalendarSyncEnabled).toBe(true);
+  });
+
+  it("returns googleCalendarConnected false when tokens missing", async () => {
+    mockAuth.mockResolvedValue({ user: { id: "user-1" } });
+    mockDbSelectLimit.mockResolvedValue([{
+      userId: "user-1",
+      weeklyHours: 10,
+      sessionLengthMinutes: 60,
+      timezone: "UTC",
+      discordWebhookUrl: null,
+      discordNotificationsEnabled: false,
+      googleEmail: null,
+      googleCalendarId: null,
+      googleRefreshToken: null,
+      googleCalendarSyncEnabled: false,
+    }]);
+
+    const res = await GET();
+    const data = await res.json();
+    expect(data.googleCalendarConnected).toBe(false);
   });
 });
 
@@ -211,6 +241,19 @@ describe("PATCH /api/preferences", () => {
     const res = await PATCH(
       makePatchRequest({ discordNotificationsEnabled: "yes" })
     );
+    expect(res.status).toBe(400);
+  });
+
+  it("accepts googleCalendarSyncEnabled boolean", async () => {
+    mockAuth.mockResolvedValue({ user: { id: "user-1" } });
+    mockDbInsertConflict.mockResolvedValue(undefined);
+    const res = await PATCH(makePatchRequest({ googleCalendarSyncEnabled: true }));
+    expect(res.status).toBe(200);
+  });
+
+  it("rejects non-boolean googleCalendarSyncEnabled", async () => {
+    mockAuth.mockResolvedValue({ user: { id: "user-1" } });
+    const res = await PATCH(makePatchRequest({ googleCalendarSyncEnabled: "yes" }));
     expect(res.status).toBe(400);
   });
 });

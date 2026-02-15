@@ -16,6 +16,7 @@ import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
 import { usePreferences, useUpdatePreferences } from "@/lib/hooks/use-preferences";
 import { useTestDiscordWebhook } from "@/lib/hooks/use-discord";
+import { useDisconnectGoogleCalendar } from "@/lib/hooks/use-google-calendar";
 
 const TIMEZONES = [
   "UTC",
@@ -39,18 +40,21 @@ export default function SettingsPage() {
   const { data: prefs, isLoading } = usePreferences();
   const updatePrefs = useUpdatePreferences();
   const testWebhook = useTestDiscordWebhook();
+  const disconnectGoogle = useDisconnectGoogleCalendar();
 
   const [weeklyHours, setWeeklyHours] = useState<number | null>(null);
   const [sessionLength, setSessionLength] = useState<number | null>(null);
   const [timezone, setTimezone] = useState<string | null>(null);
   const [discordWebhookUrl, setDiscordWebhookUrl] = useState<string | null>(null);
   const [discordEnabled, setDiscordEnabled] = useState<boolean | null>(null);
+  const [gcalSyncEnabled, setGcalSyncEnabled] = useState<boolean | null>(null);
 
   const displayWeeklyHours = weeklyHours ?? prefs?.weeklyHours ?? 10;
   const displaySessionLength = sessionLength ?? prefs?.sessionLengthMinutes ?? 60;
   const displayTimezone = timezone ?? prefs?.timezone ?? "UTC";
   const displayWebhookUrl = discordWebhookUrl ?? prefs?.discordWebhookUrl ?? "";
   const displayDiscordEnabled = discordEnabled ?? prefs?.discordNotificationsEnabled ?? false;
+  const displayGcalSyncEnabled = gcalSyncEnabled ?? prefs?.googleCalendarSyncEnabled ?? false;
 
   function handleSave() {
     updatePrefs.mutate({
@@ -59,6 +63,7 @@ export default function SettingsPage() {
       timezone: displayTimezone,
       discordWebhookUrl: displayWebhookUrl || null,
       discordNotificationsEnabled: displayDiscordEnabled,
+      googleCalendarSyncEnabled: displayGcalSyncEnabled,
     });
   }
 
@@ -187,6 +192,59 @@ export default function SettingsPage() {
             </p>
           )}
         </div>
+      </Card>
+
+      <Card className="p-6 max-w-lg space-y-6">
+        <div>
+          <h2 className="text-lg font-semibold">Google Calendar</h2>
+          <p className="text-sm text-muted-foreground">
+            Sync gaming sessions to a dedicated Google Calendar
+          </p>
+        </div>
+
+        {prefs?.googleCalendarConnected ? (
+          <>
+            <div className="flex items-center gap-2">
+              <span className="inline-flex items-center rounded-full bg-green-500/10 px-2.5 py-0.5 text-xs font-medium text-green-400">
+                Connected
+              </span>
+              {prefs.googleEmail && (
+                <span className="text-sm text-muted-foreground">{prefs.googleEmail}</span>
+              )}
+            </div>
+
+            <div className="flex items-center gap-3">
+              <Switch
+                id="gcalSyncEnabled"
+                checked={displayGcalSyncEnabled}
+                onCheckedChange={setGcalSyncEnabled}
+              />
+              <Label htmlFor="gcalSyncEnabled">Sync sessions to calendar</Label>
+            </div>
+
+            <Button
+              variant="outline"
+              onClick={() => disconnectGoogle.mutate()}
+              disabled={disconnectGoogle.isPending}
+            >
+              {disconnectGoogle.isPending ? "Disconnecting..." : "Disconnect"}
+            </Button>
+            {disconnectGoogle.isSuccess && (
+              <p className="text-sm text-green-400">Google Calendar disconnected</p>
+            )}
+            {disconnectGoogle.isError && (
+              <p className="text-sm text-destructive">
+                {disconnectGoogle.error?.message || "Failed to disconnect"}
+              </p>
+            )}
+          </>
+        ) : (
+          <Button
+            onClick={() => { window.location.href = "/api/google/connect"; }}
+          >
+            Connect Google Calendar
+          </Button>
+        )}
       </Card>
     </div>
   );

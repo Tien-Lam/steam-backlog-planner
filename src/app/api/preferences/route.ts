@@ -10,6 +10,9 @@ const DEFAULTS = {
   timezone: "UTC",
   discordWebhookUrl: null as string | null,
   discordNotificationsEnabled: false,
+  googleEmail: null as string | null,
+  googleCalendarConnected: false,
+  googleCalendarSyncEnabled: false,
 };
 
 export async function GET() {
@@ -34,6 +37,9 @@ export async function GET() {
     timezone: rows[0].timezone ?? DEFAULTS.timezone,
     discordWebhookUrl: rows[0].discordWebhookUrl ?? DEFAULTS.discordWebhookUrl,
     discordNotificationsEnabled: rows[0].discordNotificationsEnabled ?? DEFAULTS.discordNotificationsEnabled,
+    googleEmail: rows[0].googleEmail ?? DEFAULTS.googleEmail,
+    googleCalendarConnected: !!(rows[0].googleCalendarId && rows[0].googleRefreshToken),
+    googleCalendarSyncEnabled: rows[0].googleCalendarSyncEnabled ?? DEFAULTS.googleCalendarSyncEnabled,
   });
 }
 
@@ -49,12 +55,13 @@ export async function PATCH(req: NextRequest) {
   } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
-  const { weeklyHours, sessionLengthMinutes, timezone, discordWebhookUrl, discordNotificationsEnabled } = body as {
+  const { weeklyHours, sessionLengthMinutes, timezone, discordWebhookUrl, discordNotificationsEnabled, googleCalendarSyncEnabled } = body as {
     weeklyHours?: number;
     sessionLengthMinutes?: number;
     timezone?: string;
     discordWebhookUrl?: string | null;
     discordNotificationsEnabled?: boolean;
+    googleCalendarSyncEnabled?: boolean;
   };
 
   if (weeklyHours !== undefined) {
@@ -102,6 +109,12 @@ export async function PATCH(req: NextRequest) {
     }
   }
   if (discordNotificationsEnabled !== undefined) updates.discordNotificationsEnabled = discordNotificationsEnabled;
+  if (googleCalendarSyncEnabled !== undefined) {
+    if (typeof googleCalendarSyncEnabled !== "boolean") {
+      return NextResponse.json({ error: "googleCalendarSyncEnabled must be a boolean" }, { status: 400 });
+    }
+    updates.googleCalendarSyncEnabled = googleCalendarSyncEnabled;
+  }
 
   await db
     .insert(userPreferences)

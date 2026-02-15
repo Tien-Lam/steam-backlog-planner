@@ -8,6 +8,9 @@ export interface Preferences {
   timezone: string;
   discordWebhookUrl: string | null;
   discordNotificationsEnabled: boolean;
+  googleEmail: string | null;
+  googleCalendarConnected: boolean;
+  googleCalendarSyncEnabled: boolean;
 }
 
 export function usePreferences() {
