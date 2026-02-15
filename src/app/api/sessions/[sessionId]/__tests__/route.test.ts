@@ -50,6 +50,11 @@ vi.mock("@/lib/services/discord-notify", () => ({
   notifySessionCompleted: (...args: unknown[]) => mockNotifySessionCompleted(...args),
 }));
 
+vi.mock("@/lib/services/gcal-sync", () => ({
+  syncSessionUpdated: vi.fn().mockResolvedValue(undefined),
+  syncSessionDeleted: vi.fn().mockResolvedValue(undefined),
+}));
+
 import { PATCH, DELETE } from "../route";
 
 beforeEach(() => {

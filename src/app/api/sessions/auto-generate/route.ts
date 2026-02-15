@@ -5,6 +5,7 @@ import { eq, and, notInArray } from "drizzle-orm";
 import { generateSchedule } from "@/lib/services/scheduler";
 import { redis } from "@/lib/services/cache";
 import { notifyAutoGenerate } from "@/lib/services/discord-notify";
+import { syncAutoGenerate } from "@/lib/services/gcal-sync";
 
 export async function POST(req: NextRequest) {
   const session = await auth();
@@ -135,6 +136,16 @@ export async function POST(req: NextRequest) {
     startDate,
     weeks,
   }).catch((err) => console.error("[Discord] Auto-generate notify failed:", err));
+
+  const gameNameMap = new Map(backlogGames.map((g) => [g.steamAppId, g.gameName]));
+  const gcalSessions = toInsert.map((s) => ({
+    id: s.id,
+    gameName: gameNameMap.get(s.steamAppId) ?? `Game ${s.steamAppId}`,
+    startTime: s.startTime,
+    endTime: s.endTime,
+  }));
+  syncAutoGenerate(session.user.id, gcalSessions)
+    .catch((err) => console.error("[GCal] Auto-generate sync failed:", err));
 
   return NextResponse.json({ created: toInsert.length }, { status: 201 });
 }

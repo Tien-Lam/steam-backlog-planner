@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { db, scheduledSessions, gameCache } from "@/lib/db";
 import { eq, and, gte, lte } from "drizzle-orm";
 import { notifySessionCreated } from "@/lib/services/discord-notify";
+import { syncSessionCreated } from "@/lib/services/gcal-sync";
 
 export async function GET(req: NextRequest) {
   const session = await auth();
@@ -114,6 +115,13 @@ export async function POST(req: NextRequest) {
       startTime: start,
       endTime: end,
     }).catch((err) => console.error(`[Discord] Session ${id} notify failed:`, err));
+
+    syncSessionCreated(session.user.id, id, {
+      gameName: game.name,
+      startTime: start,
+      endTime: end,
+      notes: notes ?? null,
+    }).catch((err) => console.error(`[GCal] Session ${id} sync failed:`, err));
   }
 
   return NextResponse.json({ id }, { status: 201 });

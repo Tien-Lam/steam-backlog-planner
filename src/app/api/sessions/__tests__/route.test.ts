@@ -47,6 +47,10 @@ vi.mock("@/lib/services/discord-notify", () => ({
   notifySessionCreated: (...args: unknown[]) => mockNotifySessionCreated(...args),
 }));
 
+vi.mock("@/lib/services/gcal-sync", () => ({
+  syncSessionCreated: vi.fn().mockResolvedValue(undefined),
+}));
+
 import { GET, POST } from "../route";
 
 beforeEach(() => {

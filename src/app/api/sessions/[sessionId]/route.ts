@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { db, scheduledSessions, gameCache } from "@/lib/db";
 import { eq, and } from "drizzle-orm";
 import { notifySessionCompleted } from "@/lib/services/discord-notify";
+import { syncSessionUpdated, syncSessionDeleted } from "@/lib/services/gcal-sync";
 
 export async function PATCH(
   req: NextRequest,
@@ -103,20 +104,28 @@ export async function PATCH(
     return NextResponse.json({ error: "Session not found" }, { status: 404 });
   }
 
-  if (completed === true) {
-    const cacheRows = await db
-      .select({ name: gameCache.name, headerImageUrl: gameCache.headerImageUrl })
-      .from(gameCache)
-      .where(eq(gameCache.steamAppId, result[0].steamAppId))
-      .limit(1);
+  const cacheRows = await db
+    .select({ name: gameCache.name, headerImageUrl: gameCache.headerImageUrl })
+    .from(gameCache)
+    .where(eq(gameCache.steamAppId, result[0].steamAppId))
+    .limit(1);
 
-    const game = cacheRows[0];
-    if (game) {
-      notifySessionCompleted(session.user.id, {
-        gameName: game.name,
-        headerImageUrl: game.headerImageUrl,
-      }).catch((err) => console.error(`[Discord] Session ${sessionId} completion notify failed:`, err));
-    }
+  const game = cacheRows[0];
+
+  if (completed === true && game) {
+    notifySessionCompleted(session.user.id, {
+      gameName: game.name,
+      headerImageUrl: game.headerImageUrl,
+    }).catch((err) => console.error(`[Discord] Session ${sessionId} completion notify failed:`, err));
+  }
+
+  if (game && (updates.startTime || updates.endTime || updates.notes !== undefined)) {
+    syncSessionUpdated(session.user.id, sessionId, {
+      gameName: game.name,
+      startTime: result[0].startTime,
+      endTime: result[0].endTime,
+      notes: result[0].notes,
+    }).catch((err) => console.error(`[GCal] Session ${sessionId} sync failed:`, err));
   }
 
   return NextResponse.json(result[0]);
@@ -146,6 +155,9 @@ export async function DELETE(
   if (result.length === 0) {
     return NextResponse.json({ error: "Session not found" }, { status: 404 });
   }
+
+  syncSessionDeleted(session.user.id, result[0].googleCalendarEventId)
+    .catch((err) => console.error(`[GCal] Session ${sessionId} delete sync failed:`, err));
 
   return NextResponse.json({ success: true });
 }

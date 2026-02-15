@@ -75,6 +75,10 @@ vi.mock("@/lib/services/discord-notify", () => ({
   notifyAutoGenerate: (...args: unknown[]) => mockNotifyAutoGenerate(...args),
 }));
 
+vi.mock("@/lib/services/gcal-sync", () => ({
+  syncAutoGenerate: vi.fn().mockResolvedValue(undefined),
+}));
+
 import { POST } from "../route";
 
 beforeEach(() => {
