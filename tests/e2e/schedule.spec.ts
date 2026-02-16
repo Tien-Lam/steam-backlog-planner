@@ -140,6 +140,7 @@ test.describe("Schedule Page", () => {
     await expect(exportLink).toHaveAttribute("download", "");
   });
 
+  // Flaky in CI - see https://github.com/Tien-Lam/steam-backlog-planner/issues/3
   test.skip(Boolean(process.env.CI), "session card shows edit and delete buttons after auto-generate", async ({ page }) => {
     await page.goto("/schedule");
 
