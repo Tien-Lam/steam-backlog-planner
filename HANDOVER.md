@@ -1,7 +1,7 @@
 # Steam Backlog Planner - Implementation Handover
 
 ## Session Summary
-Phase 6 (continued): IGDB integration for richer game metadata (genres, ratings, descriptions, cover art) plus three deferred code review fixes (CR-028 token refresh race, CR-029 OAuth rate limiting, CR-033 transient failure tracking). Also fixed pre-existing broken HLTB integration test mock. All 473 unit tests pass (53 files), 55 integration tests pass (7 files), coverage 94.46%/89.71%/88.63%/95.22%.
+Added GitHub Actions CI workflow with 5 parallel jobs (lint, unit-tests, integration, build, e2e). Fixed 2 pre-existing lint errors to make CI green. All 473 unit tests pass (53 files), 55 integration tests pass (7 files), coverage 94.43%/89.71%/88.53%/95.21%.
 
 ## URGENT: Rotate All Credentials
 All `.env.local` secrets were exposed in a conversation. Rotate these BEFORE deploying anywhere:
@@ -11,9 +11,33 @@ All `.env.local` secrets were exposed in a conversation. Rotate these BEFORE dep
 - [ ] Steam API key (https://steamcommunity.com/dev/apikey)
 
 ## Next Session TODO
-1. Run `npm run db:push` to apply Discord + Google Calendar + IGDB schema changes to Neon
-2. Consider adding HLTB endpoint discovery (scrape JS bundles for search URL) as a fallback
-3. Phase 7 planning: what's next? (mobile polish, PWA, export features, etc.)
+1. Add `DATABASE_URL` repo secret (Settings > Secrets > Actions) to enable build + E2E CI jobs
+2. Optionally mark lint, unit-tests, integration as required status checks in branch protection
+3. Run `npm run db:push` to apply Discord + Google Calendar + IGDB schema changes to Neon
+4. Consider adding HLTB endpoint discovery (scrape JS bundles for search URL) as a fallback
+5. Phase 7 planning: what's next? (mobile polish, PWA, export features, etc.)
+
+## Completed — GitHub Actions CI
+
+### Workflow (`.github/workflows/ci.yml`)
+| Job | Script | Secrets | Notes |
+|-----|--------|---------|-------|
+| lint | `npm run lint` | none | |
+| unit-tests | `npm run test:coverage` | none | 80% coverage enforced |
+| integration | `npm run test:integration` | none | PGlite in-memory |
+| build | `npm run build` | `DATABASE_URL` | Dummy values for other env vars |
+| e2e | `npx playwright test` | `DATABASE_URL` | Chromium only, uploads HTML report artifact |
+
+- Triggered on push to main and PRs targeting main
+- Concurrency: cancel-in-progress per branch
+- Build/E2E skip gracefully when `DATABASE_URL` secret is absent (fork PRs)
+- E2E depends on build job
+
+### Lint Fixes
+- **login/page.tsx**: Added eslint-disable for intentional `<a>` tag (API route redirect)
+- **backlog-prioritizer.tsx**: Replaced `setState` in `useEffect` with React 19 key-based reset pattern
+- **eslint.config.mjs**: Added `coverage/` to global ignores
+- **playwright.config.ts**: HTML reporter in CI, list reporter locally
 
 ## Completed — Phase 6 (Continued): IGDB Integration + CR Fixes
 
