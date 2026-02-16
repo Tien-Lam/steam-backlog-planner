@@ -18,7 +18,7 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { ArrowLeft, ExternalLink } from "lucide-react";
 import { useLibrary, useUpdateGameStatus } from "@/lib/hooks/use-library";
-import { useGameAchievements, useHLTBData } from "@/lib/hooks/use-game-detail";
+import { useGameAchievements, useHLTBData, useIGDBData } from "@/lib/hooks/use-game-detail";
 import { getStorePage } from "@/lib/services/steam";
 import { formatPlaytime } from "@/lib/utils";
 import type { GameStatus } from "@/lib/db/schema";
@@ -34,6 +34,7 @@ export default function GameDetailPage({
   const { data: games, isLoading: libraryLoading } = useLibrary();
   const { data: achievements, isLoading: achievementsLoading } = useGameAchievements(appIdNum);
   const { data: hltb, isLoading: hltbLoading } = useHLTBData(appIdNum);
+  const { data: igdb, isLoading: igdbLoading } = useIGDBData(appIdNum);
   const updateStatus = useUpdateGameStatus();
 
   const game = games?.find((g) => g.steamAppId === appIdNum);
@@ -93,6 +94,39 @@ export default function GameDetailPage({
               unoptimized
             />
           </div>
+
+          {/* Genres */}
+          {igdbLoading ? (
+            <div className="flex gap-2">
+              <Skeleton className="h-6 w-16 rounded-full" />
+              <Skeleton className="h-6 w-20 rounded-full" />
+              <Skeleton className="h-6 w-14 rounded-full" />
+            </div>
+          ) : igdb?.genres && igdb.genres.length > 0 ? (
+            <div className="flex flex-wrap gap-2">
+              {igdb.genres.map((genre) => (
+                <Badge key={genre} variant="secondary">
+                  {genre}
+                </Badge>
+              ))}
+            </div>
+          ) : null}
+
+          {/* About */}
+          {igdbLoading ? (
+            <Card className="p-4 space-y-2">
+              <Skeleton className="h-5 w-16" />
+              <Skeleton className="h-4 w-full" />
+              <Skeleton className="h-4 w-3/4" />
+            </Card>
+          ) : igdb?.summary ? (
+            <Card className="p-4 space-y-2">
+              <h2 className="font-semibold">About</h2>
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                {igdb.summary}
+              </p>
+            </Card>
+          ) : null}
 
           {/* HLTB Section */}
           <Card className="p-4 space-y-3">
@@ -212,6 +246,18 @@ export default function GameDetailPage({
         {/* Sidebar */}
         <div className="space-y-4">
           <Card className="p-4 space-y-4">
+            {igdbLoading ? (
+              <div>
+                <Skeleton className="h-4 w-20 mb-1" />
+                <Skeleton className="h-7 w-12" />
+              </div>
+            ) : igdb?.rating ? (
+              <div>
+                <p className="text-sm text-muted-foreground">IGDB Rating</p>
+                <p className="text-lg font-semibold">{igdb.rating}<span className="text-sm text-muted-foreground">/100</span></p>
+              </div>
+            ) : null}
+
             <div>
               <p className="text-sm text-muted-foreground">Playtime</p>
               <p className="text-lg font-semibold">{formatPlaytime(game.playtimeMinutes)}</p>
