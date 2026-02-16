@@ -14,6 +14,17 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  try {
+    const rateLimitKey = `sbp:ratelimit:google-oauth:${session.user.id}`;
+    const count = await redis.incr(rateLimitKey);
+    await redis.expire(rateLimitKey, 300);
+    if (count > 5) {
+      return NextResponse.json({ error: "Rate limit exceeded" }, { status: 429 });
+    }
+  } catch {
+    // Rate limit check failed — allow request rather than blocking user
+  }
+
   const { searchParams } = new URL(req.url);
   const code = searchParams.get("code");
   const state = searchParams.get("state");

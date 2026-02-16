@@ -4,6 +4,8 @@ import { NextRequest } from "next/server";
 const mockAuth = vi.fn();
 const mockRedisGet = vi.fn();
 const mockRedisDel = vi.fn();
+const mockRedisIncr = vi.fn();
+const mockRedisExpire = vi.fn();
 const mockExchangeCodeForTokens = vi.fn();
 const mockGetUserEmail = vi.fn();
 const mockCreateCalendar = vi.fn();
@@ -17,6 +19,8 @@ vi.mock("@/lib/services/cache", () => ({
   redis: {
     get: (...args: unknown[]) => mockRedisGet(...args),
     del: (...args: unknown[]) => mockRedisDel(...args),
+    incr: (...args: unknown[]) => mockRedisIncr(...args),
+    expire: (...args: unknown[]) => mockRedisExpire(...args),
   },
 }));
 
@@ -54,6 +58,8 @@ beforeEach(() => {
   process.env.GOOGLE_CLIENT_ID = "cid";
   process.env.GOOGLE_CLIENT_SECRET = "csec";
   process.env.GOOGLE_REDIRECT_URI = "http://localhost:3000/api/google/callback";
+  mockRedisIncr.mockResolvedValue(1);
+  mockRedisExpire.mockResolvedValue(true);
 });
 
 describe("GET /api/google/callback", () => {
@@ -140,6 +146,31 @@ describe("GET /api/google/callback", () => {
     expect(mockDbInsertOnConflict).toHaveBeenCalledOnce();
     // State deleted immediately after validation, not at the end
     expect(mockRedisDel).toHaveBeenCalledWith("sbp:google-oauth-state:u1");
+  });
+
+  it("returns 429 when rate limit exceeded", async () => {
+    mockAuth.mockResolvedValue({ user: { id: "u1" } });
+    mockRedisIncr.mockResolvedValue(6);
+    const res = await GET(makeRequest("/api/google/callback?code=c&state=s"));
+    expect(res.status).toBe(429);
+  });
+
+  it("allows request when Redis rate limit fails (fail-open)", async () => {
+    mockAuth.mockResolvedValue({ user: { id: "u1" } });
+    mockRedisIncr.mockRejectedValue(new Error("Redis down"));
+    mockRedisGet.mockResolvedValue("valid-state");
+    mockRedisDel.mockResolvedValue(1);
+    mockExchangeCodeForTokens.mockResolvedValue({
+      accessToken: "at-1",
+      refreshToken: "rt-1",
+      expiresIn: 3600,
+    });
+    mockGetUserEmail.mockResolvedValue("user@gmail.com");
+    mockCreateCalendar.mockResolvedValue({ calendarId: "cal-123" });
+    mockDbInsertOnConflict.mockResolvedValue(undefined);
+
+    const res = await GET(makeRequest("/api/google/callback?code=c&state=valid-state"));
+    expect(res.headers.get("location")).toContain("/settings?googleConnected=true");
   });
 
   it("calls exchangeCodeForTokens with correct params", async () => {
