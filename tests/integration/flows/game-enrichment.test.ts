@@ -13,10 +13,8 @@ vi.mock("@/lib/services/steam", () => ({
     `https://cdn.akamai.steamstatic.com/steam/apps/${appId}/header.jpg`,
 }));
 
-vi.mock("howlongtobeat", () => ({
-  HowLongToBeatService: class {
-    search = mockHltbSearch;
-  },
+vi.mock("@/lib/services/hltb-client", () => ({
+  searchHLTB: (...args: unknown[]) => mockHltbSearch(...args),
 }));
 
 describe("Game Enrichment Flow", () => {
@@ -150,10 +148,10 @@ describe("Game Enrichment Flow", () => {
 
       mockHltbSearch.mockResolvedValue([
         {
-          gameplayMain: 10,
-          gameplayMainExtra: 20,
-          gameplayCompletionist: 40,
-        } as never,
+          comp_main: 36000,
+          comp_plus: 72000,
+          comp_100: 144000,
+        },
       ]);
 
       const { GET } = await import("@/app/api/hltb/[appId]/route");
