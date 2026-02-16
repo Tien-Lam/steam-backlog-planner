@@ -154,15 +154,12 @@ test.describe("Schedule Page", () => {
 
     await page.getByRole("button", { name: /generate schedule/i }).click();
 
-    // Wait for the mutation to complete and dialog to close
-    await page.waitForTimeout(500);
-    await expect(page.getByRole("heading", { name: /auto-generate schedule/i })).not.toBeVisible({
-      timeout: 15000,
-    });
-
-    // Wait for session cards to appear
+    // Wait for session cards to appear as proof of successful generation
     const sessionCard = page.locator('[data-testid="session-card"]').first();
-    await expect(sessionCard).toBeVisible({ timeout: 10000 });
+    await expect(sessionCard).toBeVisible({ timeout: 15000 });
+
+    // Dialog should have closed by now
+    await expect(page.getByRole("heading", { name: /auto-generate schedule/i })).not.toBeVisible();
 
     // Session card should have action buttons
     await expect(sessionCard.getByRole("button", { name: /complete/i })).toBeVisible();
