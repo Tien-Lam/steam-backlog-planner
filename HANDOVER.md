@@ -11,9 +11,9 @@ All `.env.local` secrets were exposed in a conversation. Rotate these BEFORE dep
 - [ ] Steam API key (https://steamcommunity.com/dev/apikey)
 
 ## Next Session TODO
-1. Add `DATABASE_URL` repo secret (Settings > Secrets > Actions) to enable build + E2E CI jobs
-2. Optionally mark lint, unit-tests, integration as required status checks in branch protection
-3. Run `npm run db:push` to apply Discord + Google Calendar + IGDB schema changes to Neon
+1. ~~Add `DATABASE_URL` repo secret~~ ✅ Done
+2. ~~Run `npm run db:push`~~ ✅ Done - schema migrated
+3. Optionally mark lint, unit-tests, integration, build, e2e as required status checks in branch protection
 4. Consider adding HLTB endpoint discovery (scrape JS bundles for search URL) as a fallback
 5. Phase 7 planning: what's next? (mobile polish, PWA, export features, etc.)
 
