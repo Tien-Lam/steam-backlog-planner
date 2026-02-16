@@ -88,6 +88,12 @@ const DDL = `
     hltb_extra_minutes INTEGER,
     hltb_completionist_minutes INTEGER,
     total_achievements INTEGER,
+    igdb_id INTEGER,
+    genres TEXT,
+    igdb_rating INTEGER,
+    summary TEXT,
+    cover_url TEXT,
+    release_date TIMESTAMP,
     cached_at TIMESTAMP NOT NULL DEFAULT NOW()
   );
 

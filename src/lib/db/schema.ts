@@ -73,6 +73,12 @@ export const gameCache = pgTable("game_cache", {
   hltbExtraMinutes: integer("hltb_extra_minutes"),
   hltbCompletionistMinutes: integer("hltb_completionist_minutes"),
   totalAchievements: integer("total_achievements"),
+  igdbId: integer("igdb_id"),
+  genres: text("genres"),
+  igdbRating: integer("igdb_rating"),
+  summary: text("summary"),
+  coverUrl: text("cover_url"),
+  releaseDate: timestamp("release_date"),
   cachedAt: timestamp("cached_at").defaultNow().notNull(),
 });
 
