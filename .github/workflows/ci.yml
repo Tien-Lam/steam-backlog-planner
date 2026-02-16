@@ -77,11 +77,11 @@ jobs:
     needs: build
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}
+      UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
       AUTH_SECRET: ci-dummy-secret-not-real
       NEXTAUTH_URL: http://localhost:3000
       STEAM_API_KEY: dummy
-      UPSTASH_REDIS_REST_URL: https://dummy.upstash.io
-      UPSTASH_REDIS_REST_TOKEN: dummy
       GOOGLE_CLIENT_ID: dummy
       GOOGLE_CLIENT_SECRET: dummy
       GOOGLE_REDIRECT_URI: http://localhost:3000/api/google/callback
