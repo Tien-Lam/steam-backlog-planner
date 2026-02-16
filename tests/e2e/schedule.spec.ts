@@ -153,6 +153,9 @@ test.describe("Schedule Page", () => {
     await page.locator("#auto-weeks").fill("1");
 
     await page.getByRole("button", { name: /generate schedule/i }).click();
+
+    // Wait for the mutation to complete and dialog to close
+    await page.waitForTimeout(500);
     await expect(page.getByRole("heading", { name: /auto-generate schedule/i })).not.toBeVisible({
       timeout: 15000,
     });
