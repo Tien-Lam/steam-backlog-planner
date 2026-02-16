@@ -1,7 +1,9 @@
 import { db, userPreferences, scheduledSessions } from "@/lib/db";
 import { eq } from "drizzle-orm";
+import { redis } from "@/lib/services/cache";
 import {
-  refreshAccessToken,
+  tryRefreshAccessToken,
+  isRefreshError,
   createEvent,
   updateEvent,
   deleteEvent,
@@ -43,25 +45,68 @@ export async function getGoogleCalendarConfig(
     const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
     if (!clientId || !clientSecret) return null;
 
-    const refreshed = await refreshAccessToken(prefs.refreshToken, clientId, clientSecret);
-    if (!refreshed) {
-      await db
-        .update(userPreferences)
-        .set({ googleCalendarSyncEnabled: false, updatedAt: new Date() })
-        .where(eq(userPreferences.userId, userId));
-      return null;
+    const lockKey = `sbp:gcal-token-refresh:${userId}`;
+    let lockAcquired = false;
+    try {
+      const result = await redis.set(lockKey, "1", { nx: true, ex: 30 });
+      lockAcquired = result === "OK";
+    } catch {
+      // Redis failure — proceed without lock (fail-open)
+      lockAcquired = true;
     }
 
-    accessToken = refreshed.accessToken;
-    const newExpiry = new Date(Date.now() + refreshed.expiresIn * 1000);
-    await db
-      .update(userPreferences)
-      .set({
-        googleAccessToken: accessToken,
-        googleTokenExpiry: newExpiry,
-        updatedAt: new Date(),
-      })
-      .where(eq(userPreferences.userId, userId));
+    if (!lockAcquired) return null;
+
+    try {
+      const result = await tryRefreshAccessToken(prefs.refreshToken, clientId, clientSecret);
+
+      if (isRefreshError(result)) {
+        if (result.permanent) {
+          await db
+            .update(userPreferences)
+            .set({ googleCalendarSyncEnabled: false, updatedAt: new Date() })
+            .where(eq(userPreferences.userId, userId));
+        } else {
+          const failKey = `sbp:gcal-refresh-failures:${userId}`;
+          try {
+            const failures = await redis.incr(failKey);
+            await redis.expire(failKey, 86400);
+            if (failures >= 3) {
+              await db
+                .update(userPreferences)
+                .set({ googleCalendarSyncEnabled: false, updatedAt: new Date() })
+                .where(eq(userPreferences.userId, userId));
+            }
+          } catch {
+            // Redis failure tracking failed — skip
+          }
+        }
+        return null;
+      }
+
+      accessToken = result.accessToken;
+      const newExpiry = new Date(Date.now() + result.expiresIn * 1000);
+      await db
+        .update(userPreferences)
+        .set({
+          googleAccessToken: accessToken,
+          googleTokenExpiry: newExpiry,
+          updatedAt: new Date(),
+        })
+        .where(eq(userPreferences.userId, userId));
+
+      try {
+        await redis.del(`sbp:gcal-refresh-failures:${userId}`);
+      } catch {
+        // Failure counter reset failed — non-critical
+      }
+    } finally {
+      try {
+        await redis.del(lockKey);
+      } catch {
+        // Lock release failed — TTL will clean up
+      }
+    }
   }
 
   return {

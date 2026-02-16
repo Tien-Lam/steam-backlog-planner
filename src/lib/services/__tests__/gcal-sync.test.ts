@@ -47,8 +47,23 @@ vi.mock("drizzle-orm", () => ({
   eq: vi.fn((_c: unknown, v: unknown) => v),
 }));
 
+const mockRedisSet = vi.fn();
+const mockRedisDel = vi.fn();
+const mockRedisIncr = vi.fn();
+const mockRedisExpire = vi.fn();
+
+vi.mock("@/lib/services/cache", () => ({
+  redis: {
+    set: (...args: unknown[]) => mockRedisSet(...args),
+    del: (...args: unknown[]) => mockRedisDel(...args),
+    incr: (...args: unknown[]) => mockRedisIncr(...args),
+    expire: (...args: unknown[]) => mockRedisExpire(...args),
+  },
+}));
+
 vi.mock("../google-calendar", () => ({
-  refreshAccessToken: (...args: unknown[]) => mockRefreshAccessToken(...args),
+  tryRefreshAccessToken: (...args: unknown[]) => mockRefreshAccessToken(...args),
+  isRefreshError: (r: unknown) => typeof r === "object" && r !== null && "permanent" in r,
   createEvent: (...args: unknown[]) => mockCreateEvent(...args),
   updateEvent: (...args: unknown[]) => mockUpdateEvent(...args),
   deleteEvent: (...args: unknown[]) => mockDeleteEvent(...args),
@@ -76,6 +91,10 @@ beforeEach(() => {
   process.env.GOOGLE_CLIENT_ID = "cid";
   process.env.GOOGLE_CLIENT_SECRET = "csec";
   mockDbUpdateWhere.mockResolvedValue(undefined);
+  mockRedisSet.mockResolvedValue("OK");
+  mockRedisDel.mockResolvedValue(1);
+  mockRedisIncr.mockResolvedValue(1);
+  mockRedisExpire.mockResolvedValue(true);
 });
 
 describe("getGoogleCalendarConfig", () => {
@@ -122,10 +141,10 @@ describe("getGoogleCalendarConfig", () => {
     );
   });
 
-  it("disables sync when refresh fails (token revoked)", async () => {
+  it("disables sync immediately on permanent refresh failure (token revoked)", async () => {
     const expired = { ...validPrefs, tokenExpiry: new Date(Date.now() - 60_000) };
     mockDbSelectLimit.mockResolvedValue([expired]);
-    mockRefreshAccessToken.mockResolvedValue(null);
+    mockRefreshAccessToken.mockResolvedValue({ permanent: true, status: 401 });
 
     const config = await getGoogleCalendarConfig("u1");
     expect(config).toBeNull();
@@ -140,6 +159,95 @@ describe("getGoogleCalendarConfig", () => {
     mockDbSelectLimit.mockResolvedValue([expired]);
 
     expect(await getGoogleCalendarConfig("u1")).toBeNull();
+  });
+
+  it("acquires Redis lock before refreshing token", async () => {
+    const expired = { ...validPrefs, tokenExpiry: new Date(Date.now() - 60_000) };
+    mockDbSelectLimit.mockResolvedValue([expired]);
+    mockRefreshAccessToken.mockResolvedValue({ accessToken: "new-at", expiresIn: 3600 });
+
+    await getGoogleCalendarConfig("u1");
+    expect(mockRedisSet).toHaveBeenCalledWith(
+      "sbp:gcal-token-refresh:u1",
+      "1",
+      { nx: true, ex: 30 }
+    );
+  });
+
+  it("returns null when lock not acquired (contention)", async () => {
+    const expired = { ...validPrefs, tokenExpiry: new Date(Date.now() - 60_000) };
+    mockDbSelectLimit.mockResolvedValue([expired]);
+    mockRedisSet.mockResolvedValue(null);
+
+    const config = await getGoogleCalendarConfig("u1");
+    expect(config).toBeNull();
+    expect(mockRefreshAccessToken).not.toHaveBeenCalled();
+  });
+
+  it("releases lock after successful refresh", async () => {
+    const expired = { ...validPrefs, tokenExpiry: new Date(Date.now() - 60_000) };
+    mockDbSelectLimit.mockResolvedValue([expired]);
+    mockRefreshAccessToken.mockResolvedValue({ accessToken: "new-at", expiresIn: 3600 });
+
+    await getGoogleCalendarConfig("u1");
+    expect(mockRedisDel).toHaveBeenCalledWith("sbp:gcal-token-refresh:u1");
+  });
+
+  it("releases lock even when refresh fails", async () => {
+    const expired = { ...validPrefs, tokenExpiry: new Date(Date.now() - 60_000) };
+    mockDbSelectLimit.mockResolvedValue([expired]);
+    mockRefreshAccessToken.mockResolvedValue({ permanent: true, status: 401 });
+
+    await getGoogleCalendarConfig("u1");
+    expect(mockRedisDel).toHaveBeenCalledWith("sbp:gcal-token-refresh:u1");
+  });
+
+  it("proceeds without lock when Redis set fails (fail-open)", async () => {
+    const expired = { ...validPrefs, tokenExpiry: new Date(Date.now() - 60_000) };
+    mockDbSelectLimit.mockResolvedValue([expired]);
+    mockRedisSet.mockRejectedValue(new Error("Redis down"));
+    mockRefreshAccessToken.mockResolvedValue({ accessToken: "new-at", expiresIn: 3600 });
+
+    const config = await getGoogleCalendarConfig("u1");
+    expect(config?.accessToken).toBe("new-at");
+  });
+
+  it("tracks transient failures in Redis counter", async () => {
+    const expired = { ...validPrefs, tokenExpiry: new Date(Date.now() - 60_000) };
+    mockDbSelectLimit.mockResolvedValue([expired]);
+    mockRefreshAccessToken.mockResolvedValue({ permanent: false, status: 500 });
+    mockRedisIncr.mockResolvedValue(1);
+
+    const config = await getGoogleCalendarConfig("u1");
+    expect(config).toBeNull();
+    expect(mockRedisIncr).toHaveBeenCalledWith("sbp:gcal-refresh-failures:u1");
+    expect(mockRedisExpire).toHaveBeenCalledWith("sbp:gcal-refresh-failures:u1", 86400);
+    // Should NOT disable sync on first failure
+    expect(mockDbUpdateSet).not.toHaveBeenCalledWith(
+      expect.objectContaining({ googleCalendarSyncEnabled: false })
+    );
+  });
+
+  it("disables sync after 3 consecutive transient failures", async () => {
+    const expired = { ...validPrefs, tokenExpiry: new Date(Date.now() - 60_000) };
+    mockDbSelectLimit.mockResolvedValue([expired]);
+    mockRefreshAccessToken.mockResolvedValue({ permanent: false, status: 503 });
+    mockRedisIncr.mockResolvedValue(3);
+
+    const config = await getGoogleCalendarConfig("u1");
+    expect(config).toBeNull();
+    expect(mockDbUpdateSet).toHaveBeenCalledWith(
+      expect.objectContaining({ googleCalendarSyncEnabled: false })
+    );
+  });
+
+  it("clears failure counter on successful refresh", async () => {
+    const expired = { ...validPrefs, tokenExpiry: new Date(Date.now() - 60_000) };
+    mockDbSelectLimit.mockResolvedValue([expired]);
+    mockRefreshAccessToken.mockResolvedValue({ accessToken: "new-at", expiresIn: 3600 });
+
+    await getGoogleCalendarConfig("u1");
+    expect(mockRedisDel).toHaveBeenCalledWith("sbp:gcal-refresh-failures:u1");
   });
 
   it("refreshes token within 60s of expiry", async () => {

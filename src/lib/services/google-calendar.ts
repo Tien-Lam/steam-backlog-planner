@@ -72,6 +72,56 @@ export async function refreshAccessToken(
   };
 }
 
+export interface RefreshError {
+  permanent: boolean;
+  status?: number;
+}
+
+export type RefreshResult = TokenResponse | RefreshError;
+
+function isRefreshError(result: RefreshResult): result is RefreshError {
+  return "permanent" in result;
+}
+
+export { isRefreshError };
+
+export async function tryRefreshAccessToken(
+  refreshToken: string,
+  clientId: string,
+  clientSecret: string
+): Promise<RefreshResult> {
+  try {
+    const res = await fetch(GOOGLE_TOKEN_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        refresh_token: refreshToken,
+        client_id: clientId,
+        client_secret: clientSecret,
+        grant_type: "refresh_token",
+      }),
+      signal: AbortSignal.timeout(FETCH_TIMEOUT),
+    });
+
+    if (!res.ok) {
+      const permanent = res.status === 400 || res.status === 401;
+      return { permanent, status: res.status };
+    }
+
+    const data = await res.json();
+    if (!data.access_token) {
+      return { permanent: true, status: res.status };
+    }
+
+    return {
+      accessToken: data.access_token,
+      expiresIn: data.expires_in ?? 3600,
+    };
+  } catch {
+    return { permanent: false };
+  }
+}
+
 export async function getUserEmail(accessToken: string): Promise<string | null> {
   const res = await fetch(GOOGLE_USERINFO_URL, {
     headers: { Authorization: `Bearer ${accessToken}` },

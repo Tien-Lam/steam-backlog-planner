@@ -6,6 +6,8 @@ vi.stubGlobal("fetch", mockFetch);
 import {
   exchangeCodeForTokens,
   refreshAccessToken,
+  tryRefreshAccessToken,
+  isRefreshError,
   getUserEmail,
   createCalendar,
   createEvent,
@@ -89,6 +91,64 @@ describe("refreshAccessToken", () => {
     mockFetch.mockResolvedValue(okJson({ token_type: "Bearer" }));
     const result = await refreshAccessToken("rt-1", "cid", "csec");
     expect(result).toBeNull();
+  });
+});
+
+describe("tryRefreshAccessToken", () => {
+  it("returns token on success", async () => {
+    mockFetch.mockResolvedValue(
+      okJson({ access_token: "new-at", expires_in: 1800 })
+    );
+    const result = await tryRefreshAccessToken("rt-1", "cid", "csec");
+    expect(isRefreshError(result)).toBe(false);
+    expect(result).toEqual({ accessToken: "new-at", expiresIn: 1800 });
+  });
+
+  it("returns permanent error on 401", async () => {
+    mockFetch.mockResolvedValue(failRes(401));
+    const result = await tryRefreshAccessToken("rt-1", "cid", "csec");
+    expect(isRefreshError(result)).toBe(true);
+    if (isRefreshError(result)) {
+      expect(result.permanent).toBe(true);
+      expect(result.status).toBe(401);
+    }
+  });
+
+  it("returns permanent error on 400 (invalid_grant)", async () => {
+    mockFetch.mockResolvedValue(failRes(400));
+    const result = await tryRefreshAccessToken("rt-1", "cid", "csec");
+    expect(isRefreshError(result)).toBe(true);
+    if (isRefreshError(result)) {
+      expect(result.permanent).toBe(true);
+    }
+  });
+
+  it("returns transient error on 500", async () => {
+    mockFetch.mockResolvedValue(failRes(500));
+    const result = await tryRefreshAccessToken("rt-1", "cid", "csec");
+    expect(isRefreshError(result)).toBe(true);
+    if (isRefreshError(result)) {
+      expect(result.permanent).toBe(false);
+      expect(result.status).toBe(500);
+    }
+  });
+
+  it("returns transient error on network failure", async () => {
+    mockFetch.mockRejectedValue(new Error("Network error"));
+    const result = await tryRefreshAccessToken("rt-1", "cid", "csec");
+    expect(isRefreshError(result)).toBe(true);
+    if (isRefreshError(result)) {
+      expect(result.permanent).toBe(false);
+    }
+  });
+
+  it("returns permanent error when access_token missing from OK response", async () => {
+    mockFetch.mockResolvedValue(okJson({ token_type: "Bearer" }));
+    const result = await tryRefreshAccessToken("rt-1", "cid", "csec");
+    expect(isRefreshError(result)).toBe(true);
+    if (isRefreshError(result)) {
+      expect(result.permanent).toBe(true);
+    }
   });
 });
 
