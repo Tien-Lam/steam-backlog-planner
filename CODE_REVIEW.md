@@ -12,28 +12,35 @@ Tracked issues from end-of-session code reviews. Fix before building on top of a
 - **Issue**: Google OAuth tokens stored in plain text in DB. If DB is compromised, attacker gains calendar access.
 - **Decision**: Accepted risk. DB is behind Neon TLS + auth. Minimal scopes (calendar + email only). Same pattern as Discord webhook URL. Encryption can be added later with `crypto.subtle` if threat model changes.
 
-### CR-028: Race condition in token refresh logic [MEDIUM]
-- **File**: `src/lib/services/gcal-sync.ts` (getGoogleCalendarConfig)
-- **Found**: Phase 6 Google Calendar review
-- **Fix by**: Future hardening (acceptable for fire-and-forget pattern)
-- **Issue**: Two concurrent sync operations for the same user could both detect expired tokens and call `refreshAccessToken()` concurrently, causing duplicate refresh requests and stale token writes.
-- **Recommendation**: Add Redis distributed lock (`sbp:gcal-token-refresh:{userId}`) around token refresh.
+### CR-035: Shared cachedAt column between HLTB and IGDB [LOW — informational]
+- **File**: `src/lib/db/schema.ts` (gameCache.cachedAt), `src/app/api/hltb/[appId]/route.ts`, `src/app/api/igdb/[appId]/route.ts`
+- **Found**: Phase 6 IGDB review
+- **Fix by**: Future (if staleness windows diverge)
+- **Issue**: Both HLTB and IGDB services write to the same `cachedAt` column when persisting data. Fetching IGDB data resets the HLTB staleness timer and vice versa. Both currently use the same 30-day window so impact is minimal.
+- **Recommendation**: If staleness windows ever need to differ, add separate `igdbCachedAt` / `hltbCachedAt` columns.
+
+## Resolved
 
 ### CR-029: Missing rate limiting on OAuth endpoints [MEDIUM]
 - **File**: `src/app/api/google/connect/route.ts`, `src/app/api/google/callback/route.ts`
 - **Found**: Phase 6 Google Calendar review
-- **Fix by**: Future hardening
-- **Issue**: OAuth connect and callback endpoints have no rate limiting. Could be abused to exhaust Redis with state tokens.
-- **Recommendation**: Add Redis-based rate limit (5 requests/5min per user), similar to auto-generate.
+- **Resolved**: Phase 6 IGDB session
+- **Issue**: OAuth connect and callback endpoints had no rate limiting, allowing Redis exhaustion via state token spam.
+- **Fix**: Added per-user Redis rate limit (5 req/300s) with INCR/EXPIRE, fail-open on Redis errors. Shared key `sbp:ratelimit:google-oauth:{userId}` across both endpoints.
 
-### CR-033: Token refresh disables sync on any failure [MEDIUM]
+### CR-028: Race condition in token refresh logic [MEDIUM]
 - **File**: `src/lib/services/gcal-sync.ts` (getGoogleCalendarConfig)
 - **Found**: Phase 6 Google Calendar review
-- **Fix by**: Future hardening
-- **Issue**: If `refreshAccessToken()` fails for any reason (including transient network errors), sync is permanently disabled. Should distinguish between recoverable and unrecoverable failures.
-- **Recommendation**: Track consecutive failures in Redis, only disable after threshold (e.g., 3 failures).
+- **Resolved**: Phase 6 IGDB session
+- **Issue**: Concurrent sync operations could both refresh tokens simultaneously, causing duplicate requests and stale token writes.
+- **Fix**: Added Redis distributed lock (`sbp:gcal-token-refresh:{userId}`) with NX flag and 30s TTL. Lock released in `finally` block. Fail-open on Redis errors. Returns null (skips sync) when lock not acquired.
 
-## Resolved
+### CR-033: Token refresh disables sync on any failure [MEDIUM]
+- **File**: `src/lib/services/gcal-sync.ts`, `src/lib/services/google-calendar.ts`
+- **Found**: Phase 6 Google Calendar review
+- **Resolved**: Phase 6 IGDB session
+- **Issue**: Any refresh failure (including transient network errors) permanently disabled sync.
+- **Fix**: Added `tryRefreshAccessToken()` returning discriminated union (TokenResponse | RefreshError). HTTP 400/401 = permanent (disable immediately). 500/network = transient (increment Redis counter `sbp:gcal-refresh-failures:{userId}` with 24h TTL, disable after 3+ consecutive failures). Counter cleared on successful refresh.
 
 ### CR-023: Discord test endpoint lacks rate limiting [MEDIUM]
 - **File**: `src/app/api/discord/test/route.ts`

@@ -1,7 +1,7 @@
 # Steam Backlog Planner - Implementation Handover
 
 ## Session Summary
-Phase 6 (continued): Google Calendar push-only integration. Users can connect their Google account from Settings, and SBP automatically pushes session events to a dedicated "Steam Backlog Planner" calendar. Includes OAuth connect/callback/disconnect routes, sync orchestrator with auto-token-refresh, fire-and-forget sync from session CRUD routes, and settings UI with connect/disconnect/toggle. Also fixed CR-023 (Discord test rate limiting) and CR-024 (stored URL re-validation). All 426 unit tests pass (50 files), coverage 93.82%/88.85%/87.86%/94.65%.
+Phase 6 (continued): IGDB integration for richer game metadata (genres, ratings, descriptions, cover art) plus three deferred code review fixes (CR-028 token refresh race, CR-029 OAuth rate limiting, CR-033 transient failure tracking). Also fixed pre-existing broken HLTB integration test mock. All 473 unit tests pass (53 files), 55 integration tests pass (7 files), coverage 94.46%/89.71%/88.63%/95.22%.
 
 ## URGENT: Rotate All Credentials
 All `.env.local` secrets were exposed in a conversation. Rotate these BEFORE deploying anywhere:
@@ -11,10 +11,57 @@ All `.env.local` secrets were exposed in a conversation. Rotate these BEFORE dep
 - [ ] Steam API key (https://steamcommunity.com/dev/apikey)
 
 ## Next Session TODO
-1. Run `npm run db:push` to apply Discord + Google Calendar schema changes to Neon
-2. Phase 6 continued: IGDB integration for additional metadata
-3. Consider adding HLTB endpoint discovery (scrape JS bundles for search URL) as a fallback
-4. Address deferred code review items: CR-028 (token refresh race), CR-029 (OAuth rate limiting), CR-033 (transient vs permanent refresh failure)
+1. Run `npm run db:push` to apply Discord + Google Calendar + IGDB schema changes to Neon
+2. Consider adding HLTB endpoint discovery (scrape JS bundles for search URL) as a fallback
+3. Phase 7 planning: what's next? (mobile polish, PWA, export features, etc.)
+
+## Completed — Phase 6 (Continued): IGDB Integration + CR Fixes
+
+### Code Review Fixes
+- **CR-029** (fixed): Per-user rate limiting (5 req/300s) on Google OAuth connect + callback endpoints
+- **CR-028** (fixed): Redis distributed lock (`NX`, 30s TTL) around token refresh to prevent race conditions
+- **CR-033** (fixed): `tryRefreshAccessToken()` discriminated union — permanent failures (400/401) disable immediately, transient (500/network) tracked in Redis counter, disable after 3+ consecutive failures
+
+### IGDB Integration
+```
+Game Detail Page → /api/igdb/[appId] → igdb.ts → igdb-client.ts → IGDB API
+                                         ↑ cachedFetch + DB persist   ↑ Twitch OAuth
+```
+
+#### New Files
+| File | Purpose |
+|------|---------|
+| `src/lib/services/igdb-client.ts` | Twitch OAuth, Apicalypse query wrapper, Steam→IGDB lookup, game details |
+| `src/lib/services/igdb.ts` | cachedFetch orchestrator, DB persistence, cover URL formatting |
+| `src/app/api/igdb/[appId]/route.ts` | Auth-gated GET, DB lookup, 30-day staleness, lazy fetch |
+
+#### Modified Files
+| File | Change |
+|------|--------|
+| `src/lib/db/schema.ts` | +6 columns on gameCache (igdbId, genres, igdbRating, summary, coverUrl, releaseDate) |
+| `src/lib/hooks/use-game-detail.ts` | +useIGDBData hook |
+| `src/app/(dashboard)/library/[appId]/page.tsx` | Genre badges, About card, IGDB Rating in sidebar |
+| `tests/integration/setup.ts` | Updated PGlite DDL with IGDB columns |
+| `tests/integration/flows/error-boundaries.test.ts` | Added IGDB route to completeness check |
+
+### Bug Fix
+- Fixed pre-existing broken integration test: `game-enrichment.test.ts` was mocking removed `howlongtobeat` package instead of current `hltb-client`. Updated mock to use correct field names (`comp_main`/`comp_plus`/`comp_100` in seconds).
+
+### Code Review Findings
+- **CR-035 LOW** (informational): HLTB and IGDB share `cachedAt` column — fetching one resets the other's staleness timer. Both use 30-day windows so impact is minimal. Would need separate columns if windows diverge.
+
+### Environment Variables (2 new)
+```
+TWITCH_CLIENT_ID=
+TWITCH_CLIENT_SECRET=
+```
+
+### Test Results
+| Suite | Files | Tests | Status |
+|-------|-------|-------|--------|
+| Unit tests | 53 | 473 | All pass |
+| Integration tests | 7 | 55 | All pass |
+| Coverage | — | — | 94.46% stmts, 89.71% branches, 88.63% funcs, 95.22% lines |
 
 ## Completed — Phase 6 (Continued): Google Calendar Push-Only Integration
 
@@ -170,12 +217,12 @@ Session APIs → discord-notify.ts → discord.ts → Discord Webhook
 | E2E tests | 6 | 35 | ✅ All pass |
 | Coverage | — | — | ✅ 92.7% stmts, 86.9% branches, 88.9% funcs, 93.8% lines |
 
-## Future — Phase 6: External Integrations (Remaining)
+## Future — Phase 6: External Integrations (Complete)
 
 ### Features
 - [x] Google Calendar push-only integration
 - [x] Discord webhook notifications
-- [ ] IGDB integration for additional metadata
+- [x] IGDB integration for additional metadata
 
 ## Completed — HLTB Package Replacement
 
@@ -502,6 +549,7 @@ steam-backlog-planner/
 │   │       ├── steam/achievements/[appId]/route.ts
 │   │       ├── games/route.ts
 │   │       ├── hltb/[appId]/route.ts
+│   │       ├── igdb/[appId]/route.ts
 │   │       ├── games/batch/route.ts
 │   │       ├── sessions/route.ts
 │   │       ├── sessions/[sessionId]/route.ts
@@ -531,7 +579,7 @@ steam-backlog-planner/
 │   └── lib/
 │       ├── auth/{index,steam-provider,types}.ts
 │       ├── db/{index,schema}.ts
-│       ├── services/{steam,cache,hltb,hltb-client,ical,scheduler,discord,discord-notify,google-calendar,gcal-sync}.ts
+│       ├── services/{steam,cache,hltb,hltb-client,ical,scheduler,discord,discord-notify,google-calendar,gcal-sync,igdb-client,igdb}.ts
 │       ├── hooks/{use-library,use-game-detail,use-preferences,use-priority,use-sessions,use-statistics,use-discord,use-google-calendar}.ts
 │       ├── utils/date.ts
 │       └── providers.tsx
