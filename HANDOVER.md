@@ -1,7 +1,7 @@
 # Steam Backlog Planner - Implementation Handover
 
 ## Session Summary
-GitHub Actions CI fully operational! All 5 jobs passing: lint, unit-tests (473), integration (55), build, e2e (34, 1 skipped). Fixed lint errors, TypeScript build errors, test helpers, and added Upstash Redis secrets. Coverage 94.43%/89.71%/88.53%/95.21%. One E2E test skipped in CI (flaky auto-generate timing issue, passes locally).
+GitHub Pages deployment workflow added. Converted dashboard layout and login page from server components to client-side auth (useSession) for static export compatibility. Split game detail page into server wrapper + client component for generateStaticParams support. Created separate deploy.yml workflow with conditional static export via STATIC_EXPORT env var. All 473 tests pass, coverage 94.43%/89.48%/88.53%/95.21%.
 
 ## URGENT: Rotate All Credentials
 All `.env.local` secrets were exposed in a conversation. Rotate these BEFORE deploying anywhere:
@@ -11,10 +11,38 @@ All `.env.local` secrets were exposed in a conversation. Rotate these BEFORE dep
 - [ ] Steam API key (https://steamcommunity.com/dev/apikey)
 
 ## Next Session TODO
-1. **Optional**: Set up branch protection with required status checks (all 5 jobs now available)
-2. **Optional**: Investigate E2E auto-generate button test CI failure (skipped for now, works locally)
-3. Consider adding HLTB endpoint discovery (scrape JS bundles for search URL) as a fallback
-4. Phase 7 planning: what's next? (mobile polish, PWA, export features, etc.)
+1. **Required**: Enable GitHub Pages in repo Settings → Pages → Source: GitHub Actions
+2. **Optional**: Set up branch protection with required status checks (all 5 jobs now available)
+3. **Optional**: Investigate E2E auto-generate button test CI failure (skipped for now, works locally)
+4. Consider adding HLTB endpoint discovery (scrape JS bundles for search URL) as a fallback
+5. Phase 7 planning: what's next? (mobile polish, PWA, export features, etc.)
+
+## Completed — GitHub Pages Deployment
+
+### Architecture Decision
+- **Separate workflow** (`deploy.yml`) rather than adding to `ci.yml` — deployment has different triggers (main only), permissions (pages write + id-token), and concurrency semantics
+- Static export is conditional: `STATIC_EXPORT=true` env var enables `output: 'export'` in next.config.ts so the regular build/CI is unaffected
+
+### Changes Made
+| File | Change |
+|------|--------|
+| `.github/workflows/deploy.yml` | New workflow: build static export → upload artifact → deploy to Pages |
+| `next.config.ts` | Conditional `output: 'export'`, `basePath`, `images.unoptimized` via `STATIC_EXPORT` env var |
+| `src/app/(dashboard)/layout.tsx` | Server→client component: `await auth()` + `redirect()` → `useSession()` + `useRouter()` |
+| `src/app/(auth)/login/page.tsx` | Server→client component: same pattern as layout |
+| `src/app/(dashboard)/library/[appId]/page.tsx` | Thin server wrapper exporting `generateStaticParams` (empty array) |
+| `src/app/(dashboard)/library/[appId]/game-detail-page.tsx` | Extracted client component (was page.tsx content) |
+
+### Setup Required
+1. Go to repo Settings → Pages → Source → select "GitHub Actions"
+2. Merge to main — workflow triggers automatically
+3. Site will be at `https://tien-lam.github.io/steam-backlog-planner/`
+
+### Limitations
+- GitHub Pages serves only static files — API routes, auth, and database won't work
+- The static export is the frontend shell only; a separate backend is needed for full functionality
+- Dynamic routes (`/library/[appId]`) only work via client-side navigation from the library grid, not via direct URL access
+- Brief loading flash before auth redirect (client-side check vs. instant server redirect)
 
 ## Completed — GitHub Actions CI
 
