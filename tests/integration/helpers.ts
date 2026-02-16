@@ -124,7 +124,8 @@ export async function seedAchievements(
 
 export function makeRequest(url: string, init?: RequestInit): NextRequest {
   const fullUrl = url.startsWith("http") ? url : `http://localhost:3000${url}`;
-  return new NextRequest(fullUrl, init);
+  const nextInit = init ? { ...init, signal: init.signal ?? undefined } : undefined;
+  return new NextRequest(fullUrl, nextInit);
 }
 
 export function makeJsonRequest(

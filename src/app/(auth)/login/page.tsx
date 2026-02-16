@@ -17,6 +17,7 @@ export default async function LoginPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
+          {/* eslint-disable-next-line @next/next/no-html-link-for-pages -- API route that redirects externally */}
           <a href="/api/auth/steam">
             <Button className="w-full gap-2 bg-[#171a21] hover:bg-[#2a475e] text-white" size="lg">
               <SteamIcon />

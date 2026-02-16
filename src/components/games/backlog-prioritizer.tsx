@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo } from "react";
 import Image from "next/image";
 import {
   DndContext,
@@ -96,12 +96,6 @@ export function BacklogPrioritizer({ games }: BacklogPrioritizerProps) {
   const [items, setItems] = useState(backlogGames);
   const [hasChanges, setHasChanges] = useState(false);
   const batchUpdate = useBatchUpdatePriorities();
-
-  const backlogKey = backlogGames.map((g) => g.steamAppId).join(",");
-  useEffect(() => {
-    setItems(backlogGames);
-    setHasChanges(false);
-  }, [backlogKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const sensors = useSensors(
     useSensor(PointerSensor),

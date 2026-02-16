@@ -26,7 +26,10 @@ export default function LibraryPage() {
           <GameGrid />
         </TabsContent>
         <TabsContent value="prioritize">
-          <BacklogPrioritizer games={games ?? []} />
+          <BacklogPrioritizer
+            key={(games ?? []).filter(g => g.status === "backlog").map(g => `${g.steamAppId}:${g.priority}`).join(",")}
+            games={games ?? []}
+          />
         </TabsContent>
       </Tabs>
     </div>

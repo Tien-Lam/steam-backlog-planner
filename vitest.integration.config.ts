@@ -9,7 +9,7 @@ export default defineConfig({
     setupFiles: ["./tests/integration/setup.ts"],
     include: ["tests/integration/**/*.test.ts"],
     pool: "forks",
-    singleFork: true,
+    fileParallelism: false,
     testTimeout: 30000,
   },
 });
