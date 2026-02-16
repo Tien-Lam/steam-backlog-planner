@@ -150,7 +150,7 @@ test.describe("Schedule Page", () => {
     });
 
     await page.locator("#auto-weeks").clear();
-    await page.locator("#auto-weeks").fill("1");
+    await page.locator("#auto-weeks").fill("2");
 
     await page.getByRole("button", { name: /generate schedule/i }).click();
 
