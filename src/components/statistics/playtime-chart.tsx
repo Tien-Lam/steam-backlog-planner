@@ -32,7 +32,7 @@ export function PlaytimeChart({ data }: PlaytimeChartProps) {
           <BarChart data={data} layout="vertical" margin={{ left: 80 }}>
             <XAxis type="number" unit="h" />
             <YAxis type="category" dataKey="name" width={80} tick={{ fontSize: 12 }} />
-            <Tooltip formatter={(value: number) => [`${value}h`, "Playtime"]} />
+            <Tooltip formatter={(value: number | undefined) => [`${value ?? 0}h`, "Playtime"]} />
             <Bar dataKey="hours" fill="hsl(var(--chart-2))" radius={[0, 4, 4, 0]} />
           </BarChart>
         </ResponsiveContainer>
