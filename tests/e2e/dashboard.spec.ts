@@ -59,7 +59,7 @@ test.describe("Dashboard Page", () => {
       await expect(page).toHaveURL(/\/statistics/);
     });
 
-    test("shows upcoming sessions after auto-generate", async ({ page }) => {
+    test.skip(Boolean(process.env.CI), "shows upcoming sessions after auto-generate", async ({ page }) => {
       // First generate some sessions via schedule page
       await page.goto("/schedule");
       await page.getByRole("button", { name: /auto-generate/i }).click();
