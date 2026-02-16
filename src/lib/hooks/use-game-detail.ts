@@ -2,6 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import type { HLTBData } from "@/lib/services/hltb";
+import type { IGDBData } from "@/lib/services/igdb";
 
 export interface AchievementData {
   achievedCount: number;
@@ -34,6 +35,18 @@ export function useHLTBData(appId: number) {
     queryKey: ["hltb", appId],
     queryFn: async () => {
       const res = await fetch(`/api/hltb/${appId}`);
+      if (!res.ok) return null;
+      return res.json();
+    },
+    enabled: !isNaN(appId),
+  });
+}
+
+export function useIGDBData(appId: number) {
+  return useQuery<IGDBData | null>({
+    queryKey: ["igdb", appId],
+    queryFn: async () => {
+      const res = await fetch(`/api/igdb/${appId}`);
       if (!res.ok) return null;
       return res.json();
     },

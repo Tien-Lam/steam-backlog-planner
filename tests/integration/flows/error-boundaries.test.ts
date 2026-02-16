@@ -140,6 +140,15 @@ const routes = [
       import("@/app/api/discord/test/route").then((m) => m.POST()),
   },
   {
+    name: "GET /api/igdb/:appId",
+    handler: () =>
+      import("@/app/api/igdb/[appId]/route").then((m) =>
+        m.GET(makeRequest("/api/igdb/440"), {
+          params: Promise.resolve({ appId: "440" }),
+        })
+      ),
+  },
+  {
     name: "GET /api/google/connect",
     handler: () =>
       import("@/app/api/google/connect/route").then((m) => m.GET()),
