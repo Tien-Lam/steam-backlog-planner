@@ -5,10 +5,6 @@ import { eq, and } from "drizzle-orm";
 import { notifySessionCompleted } from "@/lib/services/discord-notify";
 import { syncSessionUpdated, syncSessionDeleted } from "@/lib/services/gcal-sync";
 
-export function generateStaticParams() {
-  return [];
-}
-
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ sessionId: string }> }

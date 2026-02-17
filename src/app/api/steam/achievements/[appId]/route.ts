@@ -5,10 +5,6 @@ import { eq, and } from "drizzle-orm";
 import { getPlayerAchievements, getSchemaForGame } from "@/lib/services/steam";
 import { cachedFetch } from "@/lib/services/cache";
 
-export function generateStaticParams() {
-  return [];
-}
-
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ appId: string }> }
