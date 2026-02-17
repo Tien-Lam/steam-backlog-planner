@@ -4,6 +4,10 @@ import { db, gameCache } from "@/lib/db";
 import { eq } from "drizzle-orm";
 import { getIGDBData } from "@/lib/services/igdb";
 
+export function generateStaticParams() {
+  return [];
+}
+
 const IGDB_STALE_MS = 30 * 24 * 60 * 60 * 1000;
 
 export async function GET(

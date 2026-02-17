@@ -4,6 +4,10 @@ import { db, gameCache } from "@/lib/db";
 import { eq } from "drizzle-orm";
 import { getHLTBData } from "@/lib/services/hltb";
 
+export function generateStaticParams() {
+  return [];
+}
+
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ appId: string }> }
