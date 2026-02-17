@@ -1,7 +1,7 @@
 # Steam Backlog Planner - Implementation Handover
 
 ## Session Summary
-GitHub Pages deployment workflow added. Converted dashboard layout and login page from server components to client-side auth (useSession) for static export compatibility. Split game detail page into server wrapper + client component for generateStaticParams support. Created separate deploy.yml workflow with conditional static export via STATIC_EXPORT env var. All 473 tests pass, coverage 94.43%/89.48%/88.53%/95.21%.
+GitHub Pages deployment workflow added. Converted dashboard layout and login page from server components to client-side auth (useSession) for static export compatibility. Split game detail page into server wrapper + client component for generateStaticParams support. Created separate deploy.yml workflow with conditional static export via STATIC_EXPORT env var. Added `build-static` CI job to validate static export on PRs. Recommended Vercel for backend deployment (free tier, zero-config, built-in PR previews). All 473 tests pass, coverage 94.43%/89.48%/88.53%/95.21%.
 
 ## URGENT: Rotate All Credentials
 All `.env.local` secrets were exposed in a conversation. Rotate these BEFORE deploying anywhere:
@@ -12,10 +12,48 @@ All `.env.local` secrets were exposed in a conversation. Rotate these BEFORE dep
 
 ## Next Session TODO
 1. **Required**: Enable GitHub Pages in repo Settings → Pages → Source: GitHub Actions
-2. **Optional**: Set up branch protection with required status checks (all 5 jobs now available)
-3. **Optional**: Investigate E2E auto-generate button test CI failure (skipped for now, works locally)
-4. Consider adding HLTB endpoint discovery (scrape JS bundles for search URL) as a fallback
-5. Phase 7 planning: what's next? (mobile polish, PWA, export features, etc.)
+2. **Required**: Connect repo to Vercel for backend deployment (see Vercel Setup below)
+3. **Optional**: Set up branch protection with required status checks (6 CI jobs now available)
+4. **Optional**: Investigate E2E auto-generate button test CI failure (skipped for now, works locally)
+5. Consider adding HLTB endpoint discovery (scrape JS bundles for search URL) as a fallback
+6. Phase 7 planning: what's next? (mobile polish, PWA, export features, etc.)
+
+## Vercel Backend Setup (Manual Steps)
+
+### 1. Create Vercel Account & Connect Repo
+1. Go to [vercel.com](https://vercel.com) → Sign up with GitHub
+2. Click "Add New Project" → Import `Tien-Lam/steam-backlog-planner`
+3. Framework Preset will auto-detect **Next.js** — leave defaults
+
+### 2. Configure Environment Variables
+In the Vercel project dashboard → Settings → Environment Variables, add:
+
+| Variable | Value | Environments |
+|----------|-------|--------------|
+| `DATABASE_URL` | Your Neon connection string | Production, Preview |
+| `AUTH_SECRET` | `openssl rand -base64 32` (new value) | Production, Preview |
+| `NEXTAUTH_URL` | `https://your-app.vercel.app` | Production |
+| `STEAM_API_KEY` | Your Steam API key | Production, Preview |
+| `UPSTASH_REDIS_REST_URL` | Your Upstash URL | Production, Preview |
+| `UPSTASH_REDIS_REST_TOKEN` | Your Upstash token | Production, Preview |
+| `GOOGLE_CLIENT_ID` | Google OAuth client ID | Production, Preview |
+| `GOOGLE_CLIENT_SECRET` | Google OAuth secret | Production, Preview |
+| `GOOGLE_REDIRECT_URI` | `https://your-app.vercel.app/api/google/callback` | Production |
+| `TWITCH_CLIENT_ID` | Twitch client ID (for IGDB) | Production, Preview |
+| `TWITCH_CLIENT_SECRET` | Twitch secret | Production, Preview |
+
+### 3. Update OAuth Callbacks
+After first deploy, update callback URLs in:
+- **Steam**: `NEXTAUTH_URL` should match your Vercel domain
+- **Google Cloud Console**: Add `https://your-app.vercel.app/api/google/callback` as authorized redirect URI
+
+### 4. What Vercel Gives You Automatically
+- **Production deploys** on push to `main`
+- **Preview deploys** on every PR (with unique URL)
+- **Status checks** reported back to GitHub PRs
+- **Serverless API routes** (all `/api/*` routes work)
+- **Edge middleware** support
+- No GitHub Action needed — Vercel's GitHub App handles everything
 
 ## Completed — GitHub Pages Deployment
 
@@ -27,6 +65,7 @@ All `.env.local` secrets were exposed in a conversation. Rotate these BEFORE dep
 | File | Change |
 |------|--------|
 | `.github/workflows/deploy.yml` | New workflow: build static export → upload artifact → deploy to Pages |
+| `.github/workflows/ci.yml` | Added `build-static` job to validate static export on PRs |
 | `next.config.ts` | Conditional `output: 'export'`, `basePath`, `images.unoptimized` via `STATIC_EXPORT` env var |
 | `src/app/(dashboard)/layout.tsx` | Server→client component: `await auth()` + `redirect()` → `useSession()` + `useRouter()` |
 | `src/app/(auth)/login/page.tsx` | Server→client component: same pattern as layout |
