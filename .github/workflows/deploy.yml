@@ -41,6 +41,8 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
+      - name: Remove API routes (incompatible with static export)
+        run: rm -rf src/app/api
       - run: npm run build
       - name: Add .nojekyll
         run: touch out/.nojekyll
