@@ -72,6 +72,32 @@ jobs:
       - run: npm ci
       - run: npm run build
 
+  build-static:
+    name: Build (Static Export)
+    runs-on: ubuntu-latest
+    env:
+      STATIC_EXPORT: "true"
+      NEXT_PUBLIC_BASE_PATH: /steam-backlog-planner
+      DATABASE_URL: postgresql://dummy:dummy@localhost:5432/dummy
+      AUTH_SECRET: ci-dummy-secret-not-real
+      NEXTAUTH_URL: https://tien-lam.github.io/steam-backlog-planner
+      STEAM_API_KEY: dummy
+      UPSTASH_REDIS_REST_URL: https://dummy.upstash.io
+      UPSTASH_REDIS_REST_TOKEN: dummy
+      GOOGLE_CLIENT_ID: dummy
+      GOOGLE_CLIENT_SECRET: dummy
+      GOOGLE_REDIRECT_URI: http://localhost:3000/api/google/callback
+      TWITCH_CLIENT_ID: dummy
+      TWITCH_CLIENT_SECRET: dummy
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+
   e2e:
     name: E2E Tests
     runs-on: ubuntu-latest
