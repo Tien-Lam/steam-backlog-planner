@@ -57,7 +57,7 @@
     "cross-env": "^10.1.0",
     "dotenv": "^17.3.1",
     "drizzle-kit": "^0.31.9",
-    "eslint": "^10",
+    "eslint": "^9",
     "eslint-config-next": "16.1.6",
     "jsdom": "^28.1.0",
     "tailwindcss": "^4",
